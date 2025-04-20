@@ -1,0 +1,15 @@
+# Dependency directories
+node_modules/
+package-lock.json
+parkify-app-main/package-lock.json
+
+# Environment files
+.env*
+.env.local
+
+# Build files
+.next/
+out/
+
+# System files
+.DS_Store
