@@ -98,6 +98,11 @@ export default function LoginPage() {
         }
       } else {
         sessionStorage.setItem('lessorId', result.lessor_id); // Store lessor_id for future use
+        
+      sessionStorage.setItem('jwtToken', result.token);
+      localStorage.setItem('userAESKey', result.sessionKey);
+      localStorage.setItem('failedAttempts', 0);
+
         toast.success('Login successful!');
         router.push('/home_lessor'); // Redirect to the desired page on successful login
       }

@@ -21,32 +21,34 @@ const Reservations = () => {
   const [reservations, setReservations] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchReservations = async () => {
+      const token = sessionStorage.getItem("jwtToken");
+      const userId = sessionStorage.getItem("userId");
+
+      if (!token || !userId) {
+        toast.error("Missing authentication data.");
+        return;
+      }
+
       try {
-        const userId = sessionStorage.getItem("userId");
-        if (!userId) {
-          toast.error("User ID missing. Please log in.");
-          router.push("/login_renter");
-          return;
-        }
+        const res = await fetch(`/api/renterFetchReservation?userId=${userId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-        const response = await fetch(`/api/renterFetchReservation?userId=${userId}`);
-        const data = await response.json();
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error fetching data");
 
-        if (!response.ok) {
-          throw new Error(data.error || "Failed to fetch reservations.");
-        }
-
-        const sorted = data.reservationDetails.sort(
-          (a, b) => new Date(b.start_time) - new Date(a.start_time)
-        );
-
-        setReservations(sorted);
-      } catch (error) {
-        console.error("Reservation fetch error:", error.message);
-        toast.error("Unable to load reservations.");
+        setReservations(data.reservationDetails || []);
+      } catch (err) {
+        console.error("Error fetching reservations:", err.message);
+        toast.error("Error loading reservations.");
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -109,9 +111,7 @@ const Reservations = () => {
                 <p className="text-sm text-gray-500">Address: {r.location_address || "Unknown"}</p>
                 <div className="flex items-center text-gray-700 mt-2">
                   <FaClock className="mr-2" />
-                  <span>
-                    {formatThaiTime(r.start_time)} - {formatThaiTime(r.end_time)}
-                  </span>
+                  <span>{formatThaiTime(r.start_time)} - {formatThaiTime(r.end_time)}</span>
                 </div>
                 <div className="flex items-center text-gray-700 mt-2">
                   <FaCar className="mr-2" />
@@ -120,6 +120,10 @@ const Reservations = () => {
                 <div className="flex items-center text-gray-700 mt-2">
                   <FaMoneyBillWave className="mr-2" />
                   <span>Total Price: {Number(r.total_price || 0).toFixed(2)}฿</span>
+                </div>
+                <div className="flex items-center text-gray-700 mt-2">
+                  <FaSearch className="mr-2" />
+                  <span>Slot Number: {r.slot_number || "N/A"}</span>
                 </div>
               </div>
             ))

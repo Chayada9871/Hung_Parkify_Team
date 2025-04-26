@@ -1,5 +1,6 @@
 "use client";
 
+
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast, Toaster } from "react-hot-toast";
@@ -12,7 +13,6 @@ const AdminLogin = () => {
   const [errorMessage, setErrorMessage] = useState("");
   const [lockoutTimeLeft, setLockoutTimeLeft] = useState(null);
 
-  // Manage lockout logic
   useEffect(() => {
     const lockoutEnd = localStorage.getItem("lockoutEnd");
     if (lockoutEnd) {
@@ -43,12 +43,10 @@ const AdminLogin = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Toggle password visibility
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
 
-  // Handle login process
   const handleLogin = async () => {
     if (lockoutTimeLeft) return;
 
@@ -65,26 +63,26 @@ const AdminLogin = () => {
         setErrorMessage(result.error || "Invalid email or password.");
         toast.error(result.error || "Invalid email or password.");
 
-        // Increment failed attempts counter
         const failedAttempts = parseInt(localStorage.getItem("failedAttempts")) || 0;
         const newFailedAttempts = failedAttempts + 1;
         localStorage.setItem("failedAttempts", newFailedAttempts);
 
-        // Lockout after 3 failed attempts
         if (newFailedAttempts >= 3) {
-          const lockoutDuration = 30 * 1000; // 30 seconds
+          const lockoutDuration = 30 * 1000;
           const lockoutEnd = Date.now() + lockoutDuration;
           localStorage.setItem("lockoutEnd", lockoutEnd);
           setLockoutTimeLeft(lockoutDuration);
           toast.error("Too many failed attempts. Try again in 30 seconds.");
         }
       } else {
-        // Successful login
+        // ✅ Save Token and Admin ID
+        sessionStorage.setItem("jwtToken", result.token);
+        sessionStorage.setItem("admin_id", result.admin_id);
+
         setErrorMessage("");
         localStorage.removeItem("failedAttempts");
         localStorage.removeItem("lockoutEnd");
-        sessionStorage.setItem("jwtToken", result.token); // Save JWT token
-        sessionStorage.setItem("admin_id", result.admin_id); // Save admin_id
+
         toast.success("Login successful!");
         router.push("/AdminMenu");
       }
@@ -101,14 +99,7 @@ const AdminLogin = () => {
         onClick={() => router.push("/landing")}
         className="absolute top-10 left-4 flex items-center justify-center w-12 h-12 rounded-lg border border-gray-200 shadow-sm text-black"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={2}
-          stroke="currentColor"
-          className="w-6 h-6"
-        >
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
       </button>
@@ -152,13 +143,10 @@ const AdminLogin = () => {
 
           <button
             onClick={handleLogin}
-            className={`w-full ${lockoutTimeLeft ? "bg-gray-400" : "bg-gray-900"
-              } text-white py-3 rounded-lg font-semibold mb-14`}
+            className={`w-full ${lockoutTimeLeft ? "bg-gray-400" : "bg-gray-900"} text-white py-3 rounded-lg font-semibold mb-14`}
             disabled={lockoutTimeLeft}
           >
-            {lockoutTimeLeft
-              ? `Try again in ${Math.ceil(lockoutTimeLeft / 1000)}s`
-              : "Login"}
+            {lockoutTimeLeft ? `Try again in ${Math.ceil(lockoutTimeLeft / 1000)}s` : "Login"}
           </button>
         </div>
       </div>

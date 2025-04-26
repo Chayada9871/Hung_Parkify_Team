@@ -74,3 +74,57 @@ export function decryptAESKeyWithPrivateKey(encryptedBase64) {
     md: forge.md.sha256.create(),
   });
 }
+
+// ===========================================
+// 🧾 JWT SIGNING & VERIFICATION USING node-forge
+// ===========================================
+
+export function signJWT(payload, expiresInSeconds = 3600) {
+  const header = {
+    alg: "RS256",
+    typ: "JWT",
+  };
+
+  const exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
+  const payloadWithExp = { ...payload, exp };
+
+  const base64url = (obj) =>
+    forge.util.encode64(JSON.stringify(obj))
+      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+  const headerEncoded = base64url(header);
+  const payloadEncoded = base64url(payloadWithExp);
+  const toSign = `${headerEncoded}.${payloadEncoded}`;
+
+  const md = forge.md.sha256.create();
+  md.update(toSign, "utf8");
+  const signature = forge.util.encode64(privateKey.sign(md))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+  return `${headerEncoded}.${payloadEncoded}.${signature}`;
+}
+
+export function verifyJWT(token) {
+  const [headerB64, payloadB64, signatureB64] = token.split(".");
+  const toVerify = `${headerB64}.${payloadB64}`;
+  const signatureBytes = forge.util.decode64(
+    signatureB64.replace(/-/g, "+").replace(/_/g, "/")
+  );
+
+  const md = forge.md.sha256.create();
+  md.update(toVerify, "utf8");
+
+  const isValid = publicKey.verify(md.digest().bytes(), signatureBytes);
+  if (!isValid) throw new Error("Invalid signature");
+
+  const payload = JSON.parse(
+    forge.util.decode64(payloadB64.replace(/-/g, "+").replace(/_/g, "/"))
+  );
+
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.exp && payload.exp < now) {
+    throw new Error("Token expired");
+  }
+
+  return payload;
+}

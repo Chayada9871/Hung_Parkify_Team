@@ -11,7 +11,6 @@ export default function IssueDetailPage() {
   const [developerEmail, setDeveloperEmail] = useState(null);
 
   useEffect(() => {
-    // Access sessionStorage inside useEffect
     const developerId = sessionStorage.getItem("developer_id");
     const email = sessionStorage.getItem("developer_email");
     setDeveloperEmail(email);
@@ -22,7 +21,6 @@ export default function IssueDetailPage() {
     }
 
     const issueId = sessionStorage.getItem("issue_id");
-    console.log("Retrieved issue ID:", issueId); // Debugging log
 
     if (!issueId) {
       setError("No issue ID provided.");
@@ -31,25 +29,37 @@ export default function IssueDetailPage() {
     }
 
     const fetchIssueById = async (issueId) => {
+  try {
+    const jwtToken = sessionStorage.getItem("jwtToken");
+    const res = await fetch(`/api/issue?issueId=${issueId}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${jwtToken}`,
+      },
+    });
+
+    // ✅ Check response before parsing
+    if (!res.ok) {
+      let err = "Unknown error";
       try {
-        const res = await fetch(`/api/issue?issueId=${issueId}`, {
-          method: "GET",
-        });
-
-        if (!res.ok) {
-          const { error } = await res.json();
-          throw new Error(error);
-        }
-
-        const data = await res.json();
-        setIssue(data);
-      } catch (err) {
-        console.error("Error fetching issue:", err);
-        setError("An unexpected error occurred.");
-      } finally {
-        setLoading(false);
+        const body = await res.json(); // <- will throw if body is empty
+        err = body?.error || err;
+      } catch (parseErr) {
+        console.error("⚠️ Failed to parse error JSON", parseErr);
       }
-    };
+      throw new Error(err);
+    }
+
+    const data = await res.json();
+    setIssue(data);
+  } catch (err) {
+    console.error("Error fetching issue:", err);
+    setError(err.message || "An unexpected error occurred.");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
     fetchIssueById(issueId);
   }, [router]);
@@ -62,19 +72,13 @@ export default function IssueDetailPage() {
     }
 
     try {
-      console.log(
-        "Updating status with issue_id:",
-        issue.issue_id,
-        "new_status:",
-        newStatus,
-        "developer_email:",
-        developerEmail
-      );
+      const jwtToken = sessionStorage.getItem("jwtToken");
 
-      const res = await fetch(`/api/issue`, {
+      const res = await fetch("/api/issue", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${jwtToken}`, // ✅ Required for backend to validate
         },
         body: JSON.stringify({
           issue_id: issue.issue_id,
@@ -82,6 +86,7 @@ export default function IssueDetailPage() {
           developer_email: developerEmail,
         }),
       });
+      
 
       if (!res.ok) {
         const { error } = await res.json();
@@ -90,7 +95,6 @@ export default function IssueDetailPage() {
 
       const data = await res.json();
       setIssue({ ...issue, status: newStatus, resolved_by: data.resolved_by });
-      console.log("Status updated successfully");
     } catch (err) {
       console.error("Unexpected error during status update:", err);
       alert("An unexpected error occurred while updating status.");
@@ -136,10 +140,7 @@ export default function IssueDetailPage() {
         </div>
 
         <div className="mb-4">
-          <label
-            htmlFor="status"
-            className="block text-sm font-semibold mb-2"
-          >
+          <label htmlFor="status" className="block text-sm font-semibold mb-2">
             Status:
           </label>
           <div className="flex gap-2">

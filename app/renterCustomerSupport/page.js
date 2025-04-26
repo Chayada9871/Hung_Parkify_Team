@@ -12,18 +12,16 @@ export default function CustomerSupportPage() {
 
   const router = useRouter();
 
-
-// Retrieve RenterId from sessionStorage on client side
-useEffect(() => {
-const storedRenterId = sessionStorage.getItem("userId"); 
-// Hardcoded for testing; replace with session storage if needed
-if (storedRenterId) {
-    setRenterId(storedRenterId);
-} else {
-    toast.error("Renter ID not found");
-    router.push("/login_renter");
-}
-}, []);
+  // Retrieve RenterId from sessionStorage on client side
+  useEffect(() => {
+    const storedRenterId = sessionStorage.getItem("userId");
+    if (storedRenterId) {
+      setRenterId(storedRenterId);
+    } else {
+      toast.error("Renter ID not found");
+      router.push("/login_renter");
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,9 +32,13 @@ if (storedRenterId) {
     }
 
     try {
+      const token = sessionStorage.getItem("jwtToken");
       const response = await fetch('/api/renterSubmitComplaint', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ complain: issue, detail: details, userId }),
       });
 

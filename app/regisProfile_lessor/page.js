@@ -1,116 +1,94 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import toast, { Toaster } from "react-hot-toast";
 import { useRouter } from "next/navigation";
-import { v4 as uuidv4 } from "uuid";
-import { FaCheckCircle } from "react-icons/fa";
+import toast, { Toaster } from "react-hot-toast";
 
-export default function RegisterInformationPage() {
+export default function LessorRegisterInformationPage() {
   const router = useRouter();
-  
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [showSuccessPopup, setShowSuccessPopup] = useState(false); // State to control popup visibility
 
-const [email, setEmail] = useState("");
-const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [profileImage, setProfileImage] = useState(null);
 
-useEffect(() => {
+  const [lessorData, setLessorData] = useState({
+    email: "",
+    password: "",
+    firstName: "",
+    lastName: "",
+    phoneNumber: "",
+    lineUrl: "",
+  });
+
+  useEffect(() => {
   if (typeof window !== "undefined") {
-    const storedEmail = sessionStorage.getItem("userEmail") || "";
-    const storedPassword = sessionStorage.getItem("userPassword") || "";
+    const storedEmail = sessionStorage.getItem("lessorEmail");
+    const storedPassword = sessionStorage.getItem("lessorPassword");
+
+    console.log("📦 Loaded from sessionStorage:", { storedEmail, storedPassword });
+
+    if (!storedEmail || !storedPassword) {
+      toast.error("Email and password are required. Redirecting to registration.");
+      return;
+    }
+    
     setEmail(storedEmail);
     setPassword(storedPassword);
-    setUserData((prev) => ({
-      ...prev,
+
+    
+    setLessorData((prevData) => ({
+      ...prevData,
       email: storedEmail,
       password: storedPassword,
     }));
   }
-}, []);
+}, [router]);
 
-
-
-  const [userData, setUserData] = useState({
-    email: email || "",
-    password: password || "",
-    firstName: "",
-    lastName: "",
-    phoneNumber: "",
-    lineurl: "",
-  });
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setUserData((prevData) => ({
-      ...prevData,
-      [name]: value,
-    }));
-  };
+const handleChange = (e) => {
+  const { name, value } = e.target;
+  setLessorData((prevData) => ({
+    ...prevData,
+    [name]: value,
+  }));
+  console.log("✍️ Field updated:", name, value);
+};
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setSelectedFile(file);
+    if (e.target.files?.[0]) {
+      setProfileImage(e.target.files[0]);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log("🚀 Submitting user data:", lessorData);
 
-    if (
-      !userData.firstName ||
-      !userData.lastName ||
-      !userData.phoneNumber ||
-      !userData.lineurl
-    ) {
+    if (!lessorData.firstName || !lessorData.lastName || !lessorData.phoneNumber || !lessorData.lineUrl) {
       toast.error("Please fill in all fields");
       return;
     }
 
-    if (!selectedFile) {
-      toast.error("Please upload a profile image.");
-      return;
-    }
-
     try {
-      const formData = new FormData();
-      formData.append("firstName", userData.firstName);
-      formData.append("lastName", userData.lastName);
-      formData.append("email", email);
-      formData.append("password", password);
-      formData.append("phoneNumber", userData.phoneNumber);
-      formData.append("lineurl", userData.lineurl);
-      formData.append("profileImage", selectedFile);
-
       const response = await fetch("/api/lessorRegisPro", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(lessorData),
       });
 
       const result = await response.json();
+      console.log("📩 Response from server:", result);
 
       if (!response.ok) {
-        throw new Error(
-          result.error || "An error occurred during registration"
-        );
+        toast.error(result.error || 'Registration failed');
+        return;
       }
 
-      sessionStorage.removeItem("userEmail");
-      sessionStorage.removeItem("userPassword");
-      sessionStorage.setItem("lessorId", result.lessorId);
-
-      setShowSuccessPopup(true); // Show success popup
-
-      // Redirect after a short delay
       setTimeout(() => {
-        setShowSuccessPopup(false);
-        router.push("/regisPark");
-      }, 2000);
+        router.push('/login_lessor');
+      }, 100); // 100ms delay
+      
     } catch (error) {
-      toast.error(
-        error.message || "An unexpected error occurred. Please try again later."
-      );
-      console.error("Registration error:", error);
+      toast.error(error.message);
+      console.error("❌ Registration error:", error);
     }
   };
 
@@ -119,7 +97,7 @@ useEffect(() => {
       <Toaster />
       <div className="relative flex-grow overflow-y-auto p-6">
         <button
-          onClick={() => router.push("/welcomerenter")}
+          onClick={() => router.push("/register_lessor")}
           className="absolute top-10 left-4 flex items-center justify-center w-12 h-12 rounded-lg border border-gray-200 shadow-sm text-black"
         >
           <svg
@@ -130,96 +108,67 @@ useEffect(() => {
             stroke="currentColor"
             className="w-6 h-6"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M15 19l-7-7 7-7"
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
 
         <h1 className="text-2xl font-bold text-black text-left w-full px-6 mt-16 py-4">
-          Your Information for a <br /> Smooth Reservation Experience
+          Your Information for a <br /> Smooth Hosting Experience
         </h1>
 
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-6 flex flex-col items-center"
-        >
-          {/* Input fields */}
+        <form onSubmit={handleSubmit} className="space-y-6 flex flex-col items-center">
           <div className="w-11/12">
             <input
               type="text"
               name="firstName"
               placeholder="First Name"
-              value={userData.firstName}
+              value={lessorData.firstName}
               onChange={handleChange}
-              className="w-full p-4 bg-gray-100 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full p-4 bg-gray-100 border border-gray-300 rounded-lg"
             />
           </div>
-
           <div className="w-11/12">
             <input
               type="text"
               name="lastName"
               placeholder="Last Name"
-              value={userData.lastName}
+              value={lessorData.lastName}
               onChange={handleChange}
-              className="w-full p-4 bg-gray-100 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full p-4 bg-gray-100 border border-gray-300 rounded-lg"
             />
           </div>
-
           <div className="w-11/12">
             <input
-              type="number" // Ensures the input accepts only numbers
+              type="number"
               name="phoneNumber"
               placeholder="Phone Number"
-              value={userData.phoneNumber}
+              value={lessorData.phoneNumber}
               onChange={handleChange}
-              className="w-full p-4 bg-gray-100 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              min="0" // Optional: Prevents negative numbers
+              className="w-full p-4 bg-gray-100 border border-gray-300 rounded-lg"
             />
           </div>
-
           <div className="w-11/12">
             <input
               type="text"
-              name="lineurl"
+              name="lineUrl"
               placeholder="Line URL"
-              value={userData.lineurl}
+              value={lessorData.lineUrl}
               onChange={handleChange}
-              className="w-full p-4 bg-gray-100 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full p-4 bg-gray-100 border border-gray-300 rounded-lg"
             />
           </div>
-
           <div className="w-11/12">
-            <h2 className="text-gray-600 font-semibold mb-2">Profile Image</h2>
-            <input type="file" onChange={handleFileChange} />
+            <label className="block text-sm font-medium text-gray-600 mb-1">Upload Profile Image</label>
+            <input type="file" accept="image/*" onChange={handleFileChange} />
           </div>
 
           <div className="flex justify-center mb-4 w-4/5 mx-auto">
-            <button
-              type="submit"
-              className="w-full bg-customBlue text-white py-3 rounded-lg hover:bg-blue-500"
-            >
-              Get started
+            <button type="submit" className="w-full bg-customBlue text-white py-3 rounded-lg hover:bg-blue-500">
+              Register Lessor
             </button>
           </div>
         </form>
       </div>
-
-      {/* Success Popup */}
-      {showSuccessPopup && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white p-8 rounded-lg shadow-lg text-center">
-            <FaCheckCircle className="text-green-500 text-5xl mb-4" />
-            <h2 className="text-lg font-semibold mb-2">
-              Registration Successful!
-            </h2>
-            <p className="text-gray-600">You will be redirected shortly.</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

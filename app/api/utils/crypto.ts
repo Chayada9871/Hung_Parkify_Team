@@ -1,5 +1,8 @@
 import CryptoJS from "crypto-js";
-import forge from "node-forge";
+
+import sql from '../../../config/db';
+import crypto from 'crypto';
+import forge from 'node-forge';
 
 // 🧠 Static AES key for fallback (can override during encryption)
 const STATIC_AES_KEY = "12345678901234567890123456789012"; // 32 chars
@@ -61,16 +64,60 @@ export function verifySignature(data, signatureBase64) {
 // 🔐 OPTIONAL: Encrypt AES Key using RSA Public Key
 // ===========================================
 
-export function encryptAESKeyWithPublicKey(aesKey) {
-  const encrypted = publicKey.encrypt(aesKey, "RSA-OAEP", {
-    md: forge.md.sha256.create(),
-  });
-  return forge.util.encode64(encrypted); // return base64 string
+
+
+export function encryptAESWithKey(plaintext, keyHex) {
+  const key = Buffer.from(keyHex, 'hex');
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  let encrypted = cipher.update(plaintext, 'utf8', 'base64');
+  encrypted += cipher.final('base64');
+  return `${iv.toString('base64')}:${encrypted}`;
 }
 
-export function decryptAESKeyWithPrivateKey(encryptedBase64) {
-  const encryptedBytes = forge.util.decode64(encryptedBase64);
-  return privateKey.decrypt(encryptedBytes, "RSA-OAEP", {
-    md: forge.md.sha256.create(),
-  });
+export function decryptAESWithKey(encrypted, keyHex) {
+  const [ivBase64, encryptedText] = encrypted.split(':');
+  const iv = Buffer.from(ivBase64, 'base64');
+  const key = Buffer.from(keyHex, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+  let decrypted = decipher.update(encryptedText, 'base64', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
+
+export function signWithPrivateKey(data, privateKeyPEM) {
+  const privateKey = forge.pki.privateKeyFromPem(privateKeyPEM);
+  const md = forge.md.sha256.create();
+  md.update(data, 'utf8');
+  const signature = privateKey.sign(md);
+  return forge.util.encode64(signature);
+}
+
+export function verifyFieldSignature(signatureBase64, originalData, publicKeyPEM) {
+  const publicKey = forge.pki.publicKeyFromPem(publicKeyPEM);
+  const md = forge.md.sha256.create();
+  md.update(originalData, 'utf8');
+  const signatureBytes = forge.util.decode64(signatureBase64);
+  return publicKey.verify(md.digest().bytes(), signatureBytes);
+}
+
+export async function verifyJWT(req) {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader) return { isValid: false, error: 'Missing Authorization header' };
+
+  const token = authHeader.split(' ')[1];
+  if (!token) return { isValid: false, error: 'Missing token' };
+
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+    return {
+      isValid: true,
+      user: payload.user,
+      sessionKey: payload.sessionKey,
+      privateKey: payload.privateKey,
+      publicKey: payload.publicKey
+    };
+  } catch (e) {
+    return { isValid: false, error: 'Invalid token format' };
+  }
 }

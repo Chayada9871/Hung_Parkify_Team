@@ -13,14 +13,17 @@ const EditDeveloper = () => {
   });
   const [loading, setLoading] = useState(true);
 
-  // Fetch developer data using the API
   useEffect(() => {
-        if (!sessionStorage.getItem("admin_id")) {
-        toast.error("Admin ID not found. Please log in.");
-        router.push("/AdminLogin");
-        return;
-      }
+    const jwtToken = sessionStorage.getItem("jwtToken");
+    const adminId = sessionStorage.getItem("admin_id");
     const developerId = sessionStorage.getItem("developer_id");
+
+    if (!jwtToken || !adminId) {
+      toast.error("Authentication required. Please log in.");
+      router.push("/AdminLogin");
+      return;
+    }
+
     if (!developerId) {
       toast.error("Developer ID not found");
       router.push("/AdminDev");
@@ -29,7 +32,12 @@ const EditDeveloper = () => {
 
     const fetchDeveloperData = async () => {
       try {
-        const response = await fetch(`/api/adFetchDev?developerId=${developerId}`);
+        const response = await fetch(`/api/adFetchDev?developerId=${developerId}`, {
+          headers: {
+            Authorization: `Bearer ${jwtToken}`,
+          },
+        });
+
         const result = await response.json();
 
         if (response.ok) {
@@ -41,11 +49,12 @@ const EditDeveloper = () => {
           toast.error(result.error || "Failed to fetch developer data.");
           router.push("/AdminDev");
         }
-        setLoading(false);
       } catch (error) {
         console.error("Error fetching developer data:", error);
         toast.error("An error occurred while fetching data.");
         router.push("/AdminDev");
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -81,29 +90,34 @@ const EditDeveloper = () => {
   };
 
   const confirmDelete = async (isConfirmed, toastId) => {
-    if (isConfirmed) {
-      try {
-        const developerId = formData.developer_id;
-        const response = await fetch(`/api/adFetchDev?developerId=${developerId}`, {
-          method: "DELETE",
-        });
-        const result = await response.json();
+    if (!isConfirmed) return toast.dismiss(toastId);
 
-        if (response.ok) {
-          toast.success("Developer deleted successfully");
-          router.push("/AdminDev");
-        } else {
-          toast.error(result.error || "Failed to delete developer.");
-        }
-      } catch (error) {
-        console.error("Error deleting developer:", error);
-        toast.error("An error occurred while deleting the developer.");
+    try {
+      const jwtToken = sessionStorage.getItem("jwtToken");
+      const response = await fetch(`/api/adFetchDev?developerId=${formData.developer_id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${jwtToken}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        toast.success("Developer deleted successfully");
+        router.push("/AdminDev");
+      } else {
+        toast.error(result.error || "Failed to delete developer.");
       }
+    } catch (error) {
+      console.error("Error deleting developer:", error);
+      toast.error("An error occurred while deleting the developer.");
+    } finally {
+      toast.dismiss(toastId);
     }
-    toast.dismiss(toastId);
   };
 
-  if (loading) return <p>Loading...</p>;
+  if (loading) return <p className="text-center mt-10">Loading...</p>;
 
   return (
     <div className="p-6 max-w-md mx-auto">
@@ -125,17 +139,18 @@ const EditDeveloper = () => {
       </button>
 
       <div className="flex justify-between mb-4 mt-20">
-        <button onClick={handleDeleteClick} className="bg-red-500 text-white px-4 py-2 rounded">
+        <button
+          onClick={handleDeleteClick}
+          className="bg-red-500 text-white px-4 py-2 rounded"
+        >
           Delete
         </button>
       </div>
 
-      {/* Developer Details */}
       <div className="mb-4">
         <label className="block text-gray-500 mb-1">Developer ID</label>
         <input
           type="text"
-          name="developer_id"
           value={formData.developer_id}
           readOnly
           className="w-full p-2 rounded border border-gray-300 bg-gray-100"
@@ -146,7 +161,6 @@ const EditDeveloper = () => {
         <label className="block text-gray-500 mb-1">Email</label>
         <input
           type="email"
-          name="email"
           value={formData.email}
           readOnly
           className="w-full p-2 rounded border border-gray-300 bg-gray-100"

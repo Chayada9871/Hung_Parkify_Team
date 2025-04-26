@@ -1,17 +1,16 @@
-'use client';
-
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import toast, { Toaster } from 'react-hot-toast';
-import RegisterButton from '../components/RegisterButton';
-import { InputField } from '../components/InputField';
-import Link from 'next/link';
+"use client";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import toast, { Toaster } from "react-hot-toast";
+import RegisterButton from "../components/RegisterButton";
+import { InputField } from "../components/InputField";
+import Link from "next/link";
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    confirmPassword: '',
+    email: "",
+    password: "",
+    confirmPassword: "",
   });
 
   const router = useRouter();
@@ -31,48 +30,36 @@ export default function RegisterPage() {
     e.preventDefault();
 
     if (!formData.email || !formData.password || !formData.confirmPassword) {
-      toast.error('Please fill in all fields');
+      toast.error("Please fill in all fields");
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      toast.error('Passwords do not match');
+      toast.error("Passwords do not match");
       return;
     }
 
     try {
-      // Step 1: Check email availability
-      const response = await fetch('/api/lessorCheckEmail', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/lessorCheckEmail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: formData.email }),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        // Handle specific "Email already exists" case
-        if (result.error === 'Email already exists') {
-          toast.error(result.error || 'Failed to validate email', { duration: 1000, });
-          return; // Stop further execution
-        }
-
-        // Handle other errors gracefully
-        toast.error(result.error || 'Failed to validate email', { duration: 1000, });
+        toast.error(result.error || "Failed to validate email");
         return;
       }
 
-      // Step 2: Temporarily store email and password for later use in profile registration
-      sessionStorage.setItem('userEmail', formData.email);
-      sessionStorage.setItem('userPassword', formData.password);
+      sessionStorage.setItem("lessorEmail", formData.email);
+      sessionStorage.setItem("lessorPassword", formData.password);
 
-      // Redirect to the profile page
-      toast.success('Email is available! Redirecting...');
-      router.push('/regisProfile_lessor');
-
+      router.push("/regisProfile_lessor");
     } catch (error) {
-      console.error('Registration error:', error);
-      toast.error('An unexpected error occurred. Please try again.');
+      toast.error("An unexpected error occurred. Please try again.");
+      console.error("Error during registration:", error);
     }
   };
 
@@ -80,18 +67,24 @@ export default function RegisterPage() {
     <div className="flex flex-col h-screen bg-white">
       <Toaster />
 
-      {/* Back Button */}
       <button
-        onClick={() => router.push('/welcomelessor')}
+        onClick={() => router.push("/welcomelessor")}
         className="absolute top-10 left-4 flex items-center justify-center w-12 h-12 rounded-lg border border-gray-200 shadow-sm text-black"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={2}
+          stroke="currentColor"
+          className="w-6 h-6"
+        >
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
       </button>
 
       <h1 className="text-2xl font-bold text-black text-left w-full px-6 mt-16 py-10">
-        Hello! Register to get <br /> started
+        Hello! Register to get <br /> started as Lessor
       </h1>
 
       <div className="flex-grow flex flex-col items-center w-full px-6">
@@ -132,17 +125,12 @@ export default function RegisterPage() {
       </div>
 
       <div className="flex flex-col items-center mb-4 w-4/5 mx-auto">
-        <RegisterButton
-          variant="black"
-          type="submit"
-          className="w-full bg-black text-white py-3 rounded-lg"
-          onClick={handleSubmit}
-        >
+        <RegisterButton variant="black" type="submit" className="w-full bg-black text-white py-3 rounded-lg" onClick={handleSubmit}>
           Register
         </RegisterButton>
 
         <p className="mt-4 text-center text-gray-600">
-          Already have an account?{' '}
+          Already have an account?{" "}
           <Link href="/login_lessor" className="text-blue-400">
             Login Now
           </Link>

@@ -9,7 +9,6 @@ import {
   FaPlus,
 } from "react-icons/fa";
 import { useRouter, usePathname } from "next/navigation";
-import supabase from "../../config/supabaseClient";
 import { Toaster, toast } from "react-hot-toast";
 
 const CustomerComplaints = () => {
@@ -18,26 +17,32 @@ const CustomerComplaints = () => {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Check if the current path matches a specific route
   const isActive = (path) => pathname === path;
 
-  // Function to navigate to a specified page
   const handleNavigate = (path) => {
     router.push(path);
   };
 
-  // Fetch complaints from Supabase
+  // Fetch complaints with token
   useEffect(() => {
-    if (!sessionStorage.getItem("admin_id")) {
-      toast.error("Admin ID not found. Please log in.");
+    const adminId = sessionStorage.getItem("admin_id");
+    const jwtToken = sessionStorage.getItem("jwtToken");
+
+    if (!adminId || !jwtToken) {
+      toast.error("Authentication required. Please log in.");
       router.push("/AdminLogin");
       return;
     }
 
     const fetchComplaints = async () => {
       try {
-        // Fetch data from the API
-        const response = await fetch("/api/adFetchComplaint");
+        const response = await fetch("/api/adFetchComplaint", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${jwtToken}`, // 🔐 Send token
+          },
+        });
+
         const result = await response.json();
 
         if (!response.ok) {
@@ -48,7 +53,7 @@ const CustomerComplaints = () => {
         if (!result.complaints || result.complaints.length === 0) {
           toast("No complaints available.");
         } else {
-          setComplaints(result.complaints); // Update state with fetched data
+          setComplaints(result.complaints);
           console.log("Fetched complaints successfully:", result.complaints);
         }
       } catch (error) {
@@ -58,16 +63,14 @@ const CustomerComplaints = () => {
     };
 
     fetchComplaints();
-  }, []);
+  }, [router]);
 
-  // Filter complaints based on search query
   const filteredComplaints = complaints.filter((complaint) =>
     `${complaint.complain} ${complaint.submitter_id}`
       .toLowerCase()
       .includes(searchQuery.toLowerCase())
   );
 
-  // Handle navigation to edit page
   const handleEditClick = (complainId) => {
     sessionStorage.setItem("complain_id", complainId);
     router.push("/AdminComplaintEdit");
@@ -77,13 +80,11 @@ const CustomerComplaints = () => {
     <div className="flex flex-col h-screen bg-white p-6">
       <Toaster position="top-center" reverseOrder={false} />
 
-      {/* Content Area */}
       <div className="flex-grow overflow-y-auto p-6">
         <h1 className="text-3xl font-bold text-black text-left w-full mt-10 py-4">
           Customer Support 🔧
         </h1>
 
-        {/* Search Bar */}
         <div className="relative mb-4">
           <button className="absolute left-0 top-1/2 transform -translate-y-1/2 bg-grey-100 rounded-full p-2">
             <FaSearch className="text-gray-500" />
@@ -97,7 +98,6 @@ const CustomerComplaints = () => {
           />
         </div>
 
-        {/* Display Filtered Complaints */}
         {filteredComplaints.map((complaint) => (
           <div
             key={complaint.complain_id}
@@ -132,14 +132,12 @@ const CustomerComplaints = () => {
         className="fixed bottom-20 right-6 bg-blue-500 text-white p-4 rounded-full shadow-md flex items-center space-x-2 justify-center"
       >
         <FaPlus className="text-xxl" />
-        <span className="text-md font-semibold">
-          Add New Issue for Developer
-        </span>
+        <span className="text-md font-semibold">Add New Issue for Developer</span>
       </button>
+
       {/* Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 w-screen bg-white border-t border-gray-300 py-3">
         <div className="flex justify-around items-center">
-          {/* Home Button - Red when in /AdminMenu or /AdminAddIssue */}
           <button
             onClick={() => handleNavigate("/AdminMenu")}
             className={
@@ -150,12 +148,12 @@ const CustomerComplaints = () => {
           >
             <FaHome className="text-2xl" />
           </button>
-
-          {/* Customer Complaint Button */}
           <button
             onClick={() => handleNavigate("/AdminCustomerComplaint")}
             className={
-              isActive("/AdminCustomerComplaint") ? "text-red-500" : "text-gray-500"
+              isActive("/AdminCustomerComplaint")
+                ? "text-red-500"
+                : "text-gray-500"
             }
           >
             <FaExclamationTriangle className="text-2xl" />

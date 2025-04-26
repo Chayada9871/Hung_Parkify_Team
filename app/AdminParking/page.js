@@ -35,6 +35,7 @@ const ParkingLots = () => {
 
         const { parkingLotDetails } = await response.json();
         setParkingLots(parkingLotDetails);
+        
       } catch (error) {
         console.error("Error fetching parking lots:", error.message);
         toast.error(`Failed to fetch parking lots: ${error.message}`);

@@ -4,10 +4,9 @@ import React, { useEffect, useState } from "react";
 import {
   FaExclamationTriangle,
   FaSignOutAlt,
-} from "react-icons/fa"; // Import icons
-import { useRouter } from "next/navigation"; // For Next.js 13+ with app directory
+} from "react-icons/fa";
+import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
-import supabase from "../../config/supabaseClient";
 
 const IssueCard = ({ issue }) => {
   const router = useRouter();
@@ -27,8 +26,12 @@ const IssueCard = ({ issue }) => {
         <img src="/images/exclamation.png" alt="Exclamation" className="w-8 h-8" />
       </div>
       <div className="flex-1 text-center">
-        <h2 className="text-lg font-bold mb-1">{issue.issue_header}</h2>
-        <p className="text-gray-600">Reported by: {issue.reported_by || "Unknown"}</p>
+        <h2 className="text-lg font-bold mb-1">
+          {issue.issue_header || "Untitled Issue"}
+        </h2>
+        <p className="text-gray-600">
+          Reported by: {issue.reported_by || "Unknown"}
+        </p>
       </div>
       <div className="flex flex-col items-end">
         <p
@@ -63,25 +66,39 @@ const IssueReportPage = () => {
   }, [router]);
 
   useEffect(() => {
-    const fetchIssues = async () => {
+    const jwtToken = sessionStorage.getItem("jwtToken");
+    if (!jwtToken) {
+      toast.error("Authentication token not found. Please log in.");
+      router.push("/login_dev");
+      return;
+    }
+
+    const fetchIssue = async () => {
       try {
-        const { data, error } = await supabase.rpc("get_all_issues");
-        if (error) {
-          console.error("Error fetching data:", error.message || error);
-          setError("Failed to fetch issues.");
-        } else {
-          setIssues(data);
+        const response = await fetch(`/api/adFetchIssue`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${jwtToken}`,
+          },
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || "Failed to fetch issues");
         }
-      } catch (err) {
-        console.error("Unexpected error:", err);
-        setError("An unexpected error occurred.");
+
+        setIssues(result.issues || []);
+      } catch (error) {
+        console.error("Error fetching issues:", error);
+        setError("Failed to fetch issues.");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchIssues();
-  }, []);
+    fetchIssue();
+  }, [router]);
 
   const filteredIssues = searchTerm
     ? issues.filter((issue) =>

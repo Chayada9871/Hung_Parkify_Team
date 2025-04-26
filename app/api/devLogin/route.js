@@ -1,100 +1,102 @@
+// ================================================
+// 🔐 DEVELOPER LOGIN API - RSA JWT Auth (RS256)
+// ================================================
+
 import sql from '../../../config/db';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
+import fs from 'fs';
+import path from 'path';
 
-const jwtSecret = process.env.JWT_SECRET; // Ensure your .env file contains this
-const saltRounds = 10; // Number of salt rounds for bcrypt hashing
+// ================================================
+// 📂 Load RSA Private Key for Signing JWTs
+// ================================================
+const privateKey = fs.readFileSync(path.resolve('keys/private.pem'), 'utf8');
 
+const saltRounds = 10;
+
+// ================================================
+// 🚀 POST /api/devLogin
+// ================================================
 export async function POST(req) {
-    try {
-        const { email, password } = await req.json();
+  try {
+    const { email, password } = await req.json();
+    console.log("📨 Developer login attempt from:", email);
 
-        // Input validation
-        if (!email || !password) {
-            return new Response(
-                JSON.stringify({ error: "Email and password are required." }),
-                { status: 400 }
-            );
-        }
+    if (!email || !password) {
+      return new Response(JSON.stringify({ error: "Email and password are required." }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
-        // Fetch the developer user by email
-        const developerResult = await sql`
+    // 🔍 Step 2: Find developer by email
+    const result = await sql`
       SELECT developer_id, email, password
       FROM developer
       WHERE email = ${email}
       LIMIT 1
     `;
 
-        // Validate user existence
-        if (developerResult.length === 0) {
-            return new Response(
-                JSON.stringify({ error: "Invalid email or password." }),
-                { status: 401 }
-            );
-        }
-
-        const developer = developerResult[0];
-
-        // Transitional login: Check if the password is hashed or plaintext
-        let passwordMatch = false;
-        if (developer.password.startsWith('$2b$')) {
-            // Password is already bcrypt-hashed
-            passwordMatch = await bcrypt.compare(password, developer.password);
-        } else {
-            // Password is plaintext, compare directly
-            passwordMatch = password === developer.password;
-
-            if (passwordMatch) {
-                // If plaintext password matches, hash it and update the database
-                const hashedPassword = await bcrypt.hash(password, saltRounds);
-                await sql`
-          UPDATE developer
-          SET password = ${hashedPassword}
-          WHERE developer_id = ${developer.developer_id}
-        `;
-                console.log(`Password for developer_id ${developer.developer_id} has been updated to bcrypt.`);
-            }
-        }
-
-        // If password does not match, return an error
-        if (!passwordMatch) {
-            return new Response(
-                JSON.stringify({ error: "Invalid email or password." }),
-                { status: 401 }
-            );
-        }
-
-        // Generate a JWT token
-        const token = jwt.sign(
-            {
-                developer_id: developer.developer_id,
-                email: developer.email,
-                role: "developer", // Include role or other claims if needed
-            },
-            jwtSecret, // Secret key
-            { expiresIn: "1h" } // Token expiration time
-        );
-
-        // Dynamically set `Secure` for production cookies
-        const isSecure = process.env.NODE_ENV === 'production';
-        const cookie = `token=${token}; HttpOnly; Path=/; Max-Age=3600; SameSite=Strict${isSecure ? '; Secure' : ''}`;
-
-        // Return success response with developer ID
-        return new Response(
-            JSON.stringify({ developer_id: developer.developer_id }),
-            {
-                status: 200,
-                headers: {
-                    'Set-Cookie': cookie,
-                    'Content-Type': 'application/json',
-                },
-            }
-        );
-    } catch (error) {
-        console.error("Error during login:", error.message || error);
-        return new Response(
-            JSON.stringify({ error: "An error occurred during login." }),
-            { status: 500 }
-        );
+    if (result.length === 0) {
+      console.warn("❌ Developer not found:", email);
+      return new Response(JSON.stringify({ error: "Invalid email or password." }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
+
+    const dev = result[0];
+    let passwordMatch = false;
+
+    if (dev.password.startsWith('$2b$')) {
+      passwordMatch = await bcrypt.compare(password, dev.password);
+    } else {
+      passwordMatch = password === dev.password;
+      if (passwordMatch) {
+        const hashed = await bcrypt.hash(password, saltRounds);
+        await sql`
+          UPDATE developer
+          SET password = ${hashed}
+          WHERE developer_id = ${dev.developer_id}
+        `;
+        console.log(`✅ Developer password upgraded to bcrypt: ${dev.developer_id}`);
+      }
+    }
+
+    if (!passwordMatch) {
+      console.warn("❌ Invalid password for developer:", email);
+      return new Response(JSON.stringify({ error: "Invalid email or password." }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // 🎟 Step 5: Create JWT token using RSA private key
+    const token = jwt.sign(
+      {
+        developer_id: dev.developer_id,
+        email: dev.email,
+        role: 'developer',
+      },
+      privateKey,
+      { algorithm: 'RS256', expiresIn: '1h' }
+    );
+
+    console.log("✅ JWT issued for developer_id:", dev.developer_id);
+
+    return new Response(JSON.stringify({ token, developer_id: dev.developer_id }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    console.error("🔥 Developer login error:", error);
+    return new Response(
+      JSON.stringify({ error: 'Server error', details: error.message }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
 }

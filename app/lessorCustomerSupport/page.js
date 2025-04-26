@@ -9,17 +9,16 @@ export default function CustomerSupportPage() {
   const [issue, setIssue] = useState('');
   const [details, setDetails] = useState('');
   const [lessorId, setLessorId] = useState(null);
+  
   const router = useRouter();
-
 
 // Retrieve RenterId from sessionStorage on client side
 useEffect(() => {
-const storedLessorId = sessionStorage.getItem("lessorId");
-
+  const storedLessorId = sessionStorage.getItem("lessorId");
 // Hardcoded for testing; replace with session storage if needed
-if (storedLessorId) {
+  if (storedLessorId) {
     setLessorId(storedLessorId);
-} else {
+  } else {
     toast.error("Lessor ID not found");
     router.push("/login_lessor");
 }
@@ -34,10 +33,14 @@ if (storedLessorId) {
     }
 
     try {
+      const token = sessionStorage.getItem("jwtToken");
       const response = await fetch('/api/lessorSubmitComplaint', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ complain: issue, detail: details, lessorId: lessorId }),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ complain: issue, detail: details, lessorId }),
       });
 
       const result = await response.json();

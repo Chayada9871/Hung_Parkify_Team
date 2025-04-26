@@ -1,127 +1,52 @@
 import sql from '../../../config/db';
-import { encryptAES, decryptAES } from '/utils/crypto'; // ✅ Import your AES utils
+import { verifyJWT } from '/utils/auth';
+import crypto from 'crypto'; // ✅ Node's crypto module
 
-// ------------------- GET -------------------
-export async function GET(req) {
-  const { searchParams } = new URL(req.url);
-  const userId = searchParams.get('userId');
+// 🔓 AES decryption helper
+function decryptAES(encrypted, keyHex) {
+  const [ivBase64, encryptedText] = encrypted.split(':');
+  const iv = Buffer.from(ivBase64, 'base64');
+  const key = Buffer.from(keyHex, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
 
-  if (!userId) {
-    return new Response(JSON.stringify({ error: 'User ID is required' }), { status: 400 });
-  }
-
-  try {
-    const carsResult = await sql`
-      SELECT car_id, carimage, car_model, car_color, license_plate
-      FROM car
-      WHERE user_id = ${userId}
-    `;
-
-    if (carsResult.length === 0) {
-      return new Response(JSON.stringify({ message: 'No car is registered' }), { status: 200 });
-    }
-
-    // ✅ Decrypt fields
-    const decryptedCars = carsResult.map(car => ({
-      car_id: car.car_id,
-      carimage: car.carimage,
-      car_model: decryptAES(car.car_model),
-      car_color: decryptAES(car.car_color),
-      license_plate: decryptAES(car.license_plate)
-    }));
-
-    return new Response(JSON.stringify({ cars: decryptedCars }), { status: 200 });
-  } catch (error) {
-    console.error('Database Error:', error);
-    return new Response(JSON.stringify({ error: 'Error fetching data' }), { status: 500 });
-  }
+  let decrypted = decipher.update(encryptedText, 'base64', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
 }
 
-// ------------------- POST -------------------
 export async function POST(req) {
-  const { userId, car_model, car_color, license_plate, carimage } = await req.json();
+  const jwtVerification = await verifyJWT(req);
+  if (!jwtVerification.isValid) {
+    return new Response(JSON.stringify({ error: jwtVerification.error }), { status: 401 });
+  }
 
-  if (!userId || !car_model || !car_color || !license_plate) {
+  const userId = jwtVerification.user.user_id;
+  const sessionKey = jwtVerification.user.sessionKey; // ⛔️ Make sure to include this in your JWT or fetch from DB
+  const { car_model, car_color, license_plate, carimage } = await req.json();
+
+  if (!car_model || !car_color || !license_plate || !carimage) {
     return new Response(JSON.stringify({ error: 'All fields are required' }), { status: 400 });
   }
 
   try {
-    // ✅ Encrypt fields
-    const encryptedModel = encryptAES(car_model);
-    const encryptedColor = encryptAES(car_color);
-    const encryptedPlate = encryptAES(license_plate);
+    // ✅ Decrypt values
+    const model = decryptAES(car_model, sessionKey);
+    const color = decryptAES(car_color, sessionKey);
+    const plate = decryptAES(license_plate, sessionKey);
 
     const insertResult = await sql`
       INSERT INTO car (user_id, car_model, car_color, license_plate, carimage)
-      VALUES (${userId}, ${encryptedModel}, ${encryptedColor}, ${encryptedPlate}, ${carimage})
+      VALUES (${userId}, ${model}, ${color}, ${plate}, ${carimage})
       RETURNING car_id
     `;
 
-    const newCarId = insertResult[0].car_id;
-    return new Response(JSON.stringify({ carId: newCarId }), { status: 201 });
+    return new Response(JSON.stringify({
+      message: 'Car registered successfully',
+      carId: insertResult[0].car_id
+    }), { status: 201 });
+
   } catch (error) {
-    console.error('Error creating car:', error);
-    return new Response(JSON.stringify({ error: 'Error creating car' }), { status: 500 });
-  }
-}
-
-// ------------------- PUT -------------------
-export async function PUT(req) {
-  const { carId, car_model, car_color, license_plate, carimage } = await req.json();
-
-  if (!carId || !car_model || !car_color || !license_plate) {
-    return new Response(JSON.stringify({ error: 'All fields are required' }), { status: 400 });
-  }
-
-  try {
-    // ✅ Encrypt fields
-    const encryptedModel = encryptAES(car_model);
-    const encryptedColor = encryptAES(car_color);
-    const encryptedPlate = encryptAES(license_plate);
-
-    await sql`
-      UPDATE car
-      SET
-        car_model = ${encryptedModel},
-        car_color = ${encryptedColor},
-        license_plate = ${encryptedPlate},
-        carimage = ${carimage}
-      WHERE car_id = ${carId}
-    `;
-
-    return new Response(JSON.stringify({ message: 'Car updated successfully' }), { status: 200 });
-  } catch (error) {
-    console.error('Update Error:', error);
-    return new Response(JSON.stringify({ error: 'Error updating car' }), { status: 500 });
-  }
-}
-
-// ------------------- DELETE -------------------
-export async function DELETE(req) {
-  const { searchParams } = new URL(req.url);
-  const carId = searchParams.get('carId');
-
-  if (!carId) {
-    return new Response(JSON.stringify({ error: 'Car ID is required' }), { status: 400 });
-  }
-
-  try {
-    const deleteResult = await sql`
-      DELETE FROM car
-      WHERE car_id = ${carId}
-      RETURNING car_id
-    `;
-
-    if (deleteResult.length === 0) {
-      return new Response(JSON.stringify({ error: 'Car not found or could not be deleted' }), { status: 404 });
-    }
-
-    return new Response(JSON.stringify({ message: 'Car deleted successfully' }), { status: 200 });
-  } catch (error) {
-    console.error('Delete Error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Error deleting car', details: error.message }),
-      { status: 500 }
-    );
+    console.error('❌ Error registering car:', error);
+    return new Response(JSON.stringify({ error: 'Error saving car to database' }), { status: 500 });
   }
 }

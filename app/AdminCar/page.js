@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { FaCar, FaPen, FaSearch } from "react-icons/fa";
 import { useRouter } from "next/navigation";
-import supabase from "../../config/supabaseClient";
 import { Toaster, toast } from "react-hot-toast";
 
 const Cars = () => {
@@ -11,43 +10,46 @@ const Cars = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const router = useRouter();
 
-  // Fetch cars from Supabase
-  
   useEffect(() => {
+    const jwtToken = sessionStorage.getItem("jwtToken");
 
-    if (!sessionStorage.getItem("admin_id")) {
-        toast.error("Admin ID not found. Please log in.");
-        router.push("/AdminLogin");
-        return;
-      }
+    if (!jwtToken) {
+      toast.error("Authentication token not found. Please log in.");
+      router.push("/AdminLogin");
+      return;
+    }
+
     const fetchCars = async () => {
       try {
-        const { data, error } = await supabase.rpc("fetch_cars");
+        const response = await fetch("/api/adFetchCars", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${jwtToken}`,
+          },
+        });
 
-        if (error) throw error;
+        if (!response.ok) {
+          const { error } = await response.json();
+          throw new Error(error || "Failed to fetch cars.");
+        }
 
-        setCars(data);
+        const { cars: carData } = await response.json();
+        setCars(carData);
+
       } catch (error) {
-        console.error("Error fetching cars:", error);
-        toast.error("Failed to fetch cars.");
-        router.push("/AdminLogin");
+        console.error("Error fetching cars:", error.message);
+        toast.error(`Failed to fetch cars: ${error.message}`);
       }
     };
 
     fetchCars();
   }, [router]);
 
-  // Filter cars based on search query for license_plate
   const filteredCars = cars.filter((car) =>
     car.license_plate.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Handle navigation to edit page
-  const handleEditClick = (carId) => {
-    sessionStorage.setItem("car_id", carId); // Store car_id in sessionStorage
-    router.push("/AdminCarEdit"); // Redirect to edit page without car_id in the URL
-  };
-
+ 
   return (
     <div className="flex flex-col h-screen bg-white">
       <Toaster position="top-center" reverseOrder={false} />
@@ -64,11 +66,7 @@ const Cars = () => {
             stroke="currentColor"
             className="w-6 h-6"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M15 19l-7-7 7-7"
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
 
@@ -76,7 +74,6 @@ const Cars = () => {
           Cars
         </h1>
 
-        {/* Search Bar */}
         <div className="relative mb-4">
           <button className="absolute left-0 top-1/2 transform -translate-y-1/2 bg-grey-100 rounded-full p-2">
             <FaSearch className="text-gray-500" />
@@ -91,25 +88,26 @@ const Cars = () => {
           />
         </div>
 
-        {/* Display Filtered Cars */}
         {filteredCars.map((car) => (
           <div
             key={car.car_id}
-            className="flex items-center justify-between bg-gray-100 p-4 rounded-lg mb-4"
+            className="flex flex-col bg-gray-100 p-4 rounded-lg mb-4 shadow-sm"
           >
-            <div className="flex items-center">
-              <FaCar className="text-xl mr-3 text-black" />
-              <span className="font-semibold text-black">
-                {car.license_plate} ({car.car_model} - {car.car_color})
-              </span>
+            <div className="flex justify-between items-start">
+              <div className="flex flex-col">
+                <div className="flex items-center mb-1">
+                  <FaCar className="text-xl mr-3 text-black" />
+                  <span className="font-semibold text-black">
+                    {car.license_plate}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-700">Model: {car.car_model}</p>
+                <p className="text-sm text-gray-700">Color: {car.car_color}</p>
+                <p className="text-sm text-gray-700">User ID: {car.user_id}</p>
+              </div>
+
             </div>
-            <button
-              onClick={() => handleEditClick(car.car_id)}
-              className="flex items-center text-black"
-            >
-              <FaPen className="text-xl mr-2" />
-              Edit Info
-            </button>
+
           </div>
         ))}
       </div>

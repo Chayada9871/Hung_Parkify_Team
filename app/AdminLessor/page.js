@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { FaUser, FaPen, FaSearch } from "react-icons/fa";
+import { FaMapMarkerAlt, FaPen, FaSearch, FaUser } from "react-icons/fa";
 import { useRouter } from "next/navigation";
-import supabase from "../../config/supabaseClient";
 import { Toaster, toast } from "react-hot-toast";
 
 const Lessors = () => {
@@ -11,46 +10,52 @@ const Lessors = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const router = useRouter();
 
-
-  // Fetch lessors from Supabase
+  // ✅ Fetch lessors with JWT token verification
   useEffect(() => {
+    const jwtToken = sessionStorage.getItem("jwtToken");
+     if (!jwtToken) {
+          toast.error("Authentication token not found. Please log in.");
+          router.push("/AdminLogin");
+          return;
+        }
 
-    if (!sessionStorage.getItem("admin_id")) {
-        toast.error("Admin ID not found. Please log in.");
-        router.push("/AdminLogin");
-        return;
-      }
     const fetchLessors = async () => {
       try {
-        const response = await fetch(`/api/adFetchLessor`);
-        if (!response.ok) 
-          {throw new Error("Failed to fetch lessor.", response.error);
-         }
-        else{
-          const { lessorDetails } = await response.json();
-          setLessors(lessorDetails);}
-        } 
-        catch (error) {
-          console.error("Error fetching lessor:", error);
-          toast.error("Failed to fetch lessor.");
-          router.push("/AdminMenu"); }};
+        const response = await fetch(`/api/adFetchLessor`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${jwtToken}`, // Add token to Authorization header
+          },
+        });
+
+        if (!response.ok) {
+          const errorDetails = await response.json();
+          throw new Error(`Failed to fetch parking lots: ${errorDetails.error}`);
+        }
+
+        const { lessorDetails } = await response.json();
+        setLessors(lessorDetails);
+
+      } catch (error) {
+        console.error("Error fetching lessor:222", error);
+        toast.error("Failed to fetch lessor.");
+      }
+    };
 
     fetchLessors();
-  }, []);
+  }, [router]);
 
-  
-
-  // Filter lessors based on search query
+  // 🔍 Filter lessors based on search query
   const filteredLessors = lessors.filter((lessor) =>
     `${lessor.lessor_firstname} ${lessor.lessor_lastname}`
       .toLowerCase()
       .includes(searchQuery.toLowerCase())
   );
 
-  // Handle navigation to edit page
+  // ✏️ Navigate to edit page
   const handleEditClick = (lessorId) => {
-    sessionStorage.setItem("lessor_id", lessorId); // Store lessor_id in sessionStorage
-    router.push("/AdminLessorEdit"); // Redirect to edit page without lessor_id in the URL
+    sessionStorage.setItem("lessor_id", lessorId);
+    router.push("/AdminLessorEdit");
   };
 
   return (
@@ -69,11 +74,7 @@ const Lessors = () => {
             stroke="currentColor"
             className="w-6 h-6"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M15 19l-7-7 7-7"
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
 
@@ -81,12 +82,11 @@ const Lessors = () => {
           Lessors
         </h1>
 
-        {/* Search Bar */}
+        {/* 🔍 Search Bar */}
         <div className="relative mb-4">
           <button className="absolute left-0 top-1/2 transform -translate-y-1/2 bg-grey-100 rounded-full p-2">
             <FaSearch className="text-gray-500" />
           </button>
-
           <input
             type="text"
             placeholder="Search"
@@ -96,7 +96,7 @@ const Lessors = () => {
           />
         </div>
 
-        {/* Display Filtered Lessors */}
+        {/* 📋 Display Filtered Lessors */}
         {filteredLessors.map((lessor) => (
           <div
             key={lessor.lessor_id}

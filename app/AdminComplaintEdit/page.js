@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Toaster, toast } from "react-hot-toast";
-import supabase from "../../config/supabaseClient";
 import { FaSave, FaTrashAlt, FaPlus, FaPen } from "react-icons/fa";
 
 const CustomerComplaintEdit = () => {
@@ -18,138 +17,124 @@ const CustomerComplaintEdit = () => {
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
 
-  // Fetch complaint data
   useEffect(() => {
-        if (!sessionStorage.getItem("admin_id")) {
-        toast.error("Admin ID not found. Please log in.");
-        router.push("/AdminLogin");
-        return;
-      }
+    const adminId = sessionStorage.getItem("admin_id");
+    const jwtToken = sessionStorage.getItem("jwtToken");
     const complainId = sessionStorage.getItem("complain_id");
+
+    if (!adminId || !jwtToken) {
+      toast.error("Admin session missing. Please log in.");
+      router.push("/AdminLogin");
+      return;
+    }
+
     if (!complainId) {
       toast.error("Complaint ID not found");
-      router.push("/CustomerComplaint");
       return;
     }
 
     const fetchComplaintData = async () => {
-      const complainId = sessionStorage.getItem("complain_id");
-      if (!complainId) {
-        toast.error("Complaint ID not found");
-        router.push("/CustomerComplaint");
-        return;
-      }
-
       try {
-        const response = await fetch(
-          `/api/adFetchComplaint?complainId=${complainId}`
-        );
-        const result = await response.json();
-
-        if (!response.ok)
-          throw new Error(result.error || "Error fetching complaint data");
-
-        setFormData({
-          complain_id: result.complaints[0].complain_id,
-          complain: result.complaints[0].complain,
-          detail: result.complaints[0].detail,
-          submitter_id: result.complaints[0].submitter_id,
-          user_type: result.complaints[0].user_type,
+        const response = await fetch(`/api/adFetchComplaint?complainId=${complainId}`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${jwtToken}`,
+          },
         });
-        setLoading(false);
+
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Error fetching complaint");
+
+        const complaint = result.complaints[0];
+        setFormData({
+          complain_id: complaint.complain_id,
+          complain: complaint.complain,
+          detail: complaint.detail,
+          submitter_id: complaint.submitter_id,
+          user_type: complaint.user_type,
+        });
       } catch (error) {
-        console.error("Error fetching complaint data:", error);
-        toast.error("Failed to fetch complaint data.");
-        router.push("/CustomerComplaint");
+        console.error("❌ Fetch Error:", error);
+        toast.error("Failed to load complaint");
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchComplaintData();
   }, [router]);
 
-  // Handle save click
   const handleSaveClick = async () => {
-  try {
-    const response = await fetch("/api/adFetchComplaint", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        complain_id: formData.complain_id,
-        complain: formData.complain,
-        detail: formData.detail,
-        user_type: formData.user_type,
-      }),
-    });
+    try {
+      const jwtToken = sessionStorage.getItem("jwtToken");
+      const response = await fetch("/api/adFetchComplaint", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${jwtToken}`,
+        },
+        body: JSON.stringify(formData),
+      });
 
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Error updating complaint data");
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
 
-    toast.success("Complaint information updated successfully");
-    setIsEditing(false);
-  } catch (error) {
-    console.error("Error saving complaint data:", error);
-    toast.error("Failed to update complaint information.");
-  }
-};
+      toast.success("Complaint updated successfully");
+      setIsEditing(false);
+    } catch (error) {
+      console.error("❌ Save Error:", error);
+      toast.error("Failed to update complaint");
+    }
+  };
 
+  const confirmDelete = async (isConfirmed, toastId) => {
+    if (!isConfirmed) {
+      toast.dismiss(toastId);
+      return;
+    }
 
-  // Handle delete click
+    try {
+      const jwtToken = sessionStorage.getItem("jwtToken");
+      const response = await fetch(`/api/adFetchComplaint?complainId=${formData.complain_id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${jwtToken}`,
+        },
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+
+      toast.success("Complaint deleted");
+      router.push("/CustomerComplaint");
+    } catch (error) {
+      console.error("❌ Delete Error:", error);
+      toast.error("Failed to delete complaint");
+    } finally {
+      toast.dismiss(toastId);
+    }
+  };
+
   const handleDeleteClick = () => {
     const toastId = toast(
       <div>
         <p>Are you sure you want to delete this complaint?</p>
-        <div className="flex justify-between mt-2">
-          <button
-            onClick={() => confirmDelete(true, toastId)}
-            className="bg-red-500 text-white px-3 py-1 rounded mr-2"
-          >
+        <div className="flex justify-end space-x-3 mt-2">
+          <button onClick={() => confirmDelete(true, toastId)} className="bg-red-500 text-white px-3 py-1 rounded">
             Yes
           </button>
-          <button
-            onClick={() => toast.dismiss(toastId)}
-            className="bg-gray-500 text-white px-3 py-1 rounded"
-          >
+          <button onClick={() => toast.dismiss(toastId)} className="bg-gray-500 text-white px-3 py-1 rounded">
             No
           </button>
         </div>
       </div>,
-      {
-        position: "top-center",
-        autoClose: false,
-        closeOnClick: false,
-        draggable: false,
-      }
+      { position: "top-center", autoClose: false }
     );
   };
 
-  // Confirm delete
- const confirmDelete = async (isConfirmed, toastId) => {
-  if (isConfirmed) {
-    try {
-      const complainId = formData.complain_id;
-
-      const response = await fetch(`/api/adFetchComplaint?complainId=${complainId}`, {
-        method: "DELETE",
-      });
-
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Error deleting complaint");
-
-      toast.success("Complaint deleted successfully");
-      router.push("/CustomerComplaint");
-    } catch (error) {
-      console.error("Error deleting complaint:", error);
-      toast.error("Failed to delete complaint.");
-    }
-  }
-  toast.dismiss(toastId);
-};
-
-
-  // Handle input change
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   if (loading) return <p>Loading...</p>;
@@ -159,120 +144,61 @@ const CustomerComplaintEdit = () => {
       <Toaster />
       <button
         onClick={() => router.push("/AdminCustomerComplaint")}
-        className="absolute top-10 left-4 flex items-center justify-center w-12 h-12 rounded-lg border border-gray-200 shadow-sm text-black"
+        className="absolute top-10 left-4 w-12 h-12 flex justify-center items-center border rounded-lg shadow"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={2}
-          stroke="currentColor"
-          className="w-6 h-6"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M15 19l-7-7 7-7"
-          />
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
       </button>
 
-      <div className="flex justify-between mb-4 mt-20">
-        <button
-          onClick={handleDeleteClick}
-          className="bg-red-500 text-white px-4 py-2 rounded flex items-center space-x-2"
-        >
+      <div className="flex justify-between my-6">
+        <button onClick={handleDeleteClick} className="bg-red-500 text-white px-4 py-2 rounded flex items-center space-x-2">
           <FaTrashAlt /> <span>Delete</span>
         </button>
         {isEditing ? (
-          <button
-            onClick={handleSaveClick}
-            className="bg-blue-500 text-white px-4 py-2 rounded flex items-center space-x-2"
-          >
+          <button onClick={handleSaveClick} className="bg-blue-500 text-white px-4 py-2 rounded flex items-center space-x-2">
             <FaSave /> <span>Save</span>
           </button>
         ) : (
-          <button
-            onClick={() => setIsEditing(true)}
-            className="bg-blue-500 text-white px-4 py-2 rounded flex items-center space-x-2"
-          >
-            <FaPen />
-            <span>Edit</span>
+          <button onClick={() => setIsEditing(true)} className="bg-blue-500 text-white px-4 py-2 rounded flex items-center space-x-2">
+            <FaPen /> <span>Edit</span>
           </button>
         )}
       </div>
 
-      {/* Complaint Details */}
-      <div className="mb-4">
-        <label className="block text-gray-500 mb-1">Complaint ID</label>
-        <input
-          type="text"
-          name="complain_id"
-          value={formData.complain_id}
-          readOnly
-          className="w-full p-2 rounded border border-gray-300 bg-gray-100"
-        />
-      </div>
-      <div className="mb-4">
-        <label className="block text-gray-500 mb-1">Complaint</label>
-        <input
-          type="text"
-          name="complain"
-          value={formData.complain}
-          onChange={handleChange}
-          readOnly={!isEditing}
-          className={`w-full p-2 rounded border ${
-            isEditing ? "border-blue-400" : "border-gray-300"
-          }`}
-        />
-      </div>
-      <div className="mb-4">
-        <label className="block text-gray-500 mb-1">Detail</label>
-        <textarea
-          name="detail"
-          value={formData.detail}
-          onChange={handleChange}
-          readOnly={!isEditing}
-          className={`w-full p-2 rounded border ${
-            isEditing ? "border-blue-400" : "border-gray-300"
-          }`}
-          rows="4"
-        />
-      </div>
-      <div className="mb-4">
-        <label className="block text-gray-500 mb-1">Submitter ID</label>
-        <input
-          type="text"
-          name="submitter_id"
-          value={formData.submitter_id}
-          onChange={handleChange}
-          readOnly={!isEditing}
-          className={`w-full p-2 rounded border ${
-            isEditing ? "border-blue-400" : "border-gray-300"
-          }`}
-        />
-      </div>
-      <div className="mb-4">
-        <label className="block text-gray-500 mb-1">User Type</label>
-        <input
-          type="text"
-          name="user_type"
-          value={formData.user_type}
-          onChange={handleChange}
-          readOnly={!isEditing}
-          className={`w-full p-2 rounded border ${
-            isEditing ? "border-blue-400" : "border-gray-300"
-          }`}
-        />
-      </div>
+      {/* Fields */}
+      {["complain_id", "complain", "detail", "submitter_id", "user_type"].map((field) => (
+        <div className="mb-4" key={field}>
+          <label className="block text-gray-600 capitalize">{field.replace("_", " ")}</label>
+          {field === "detail" ? (
+            <textarea
+              name={field}
+              rows={4}
+              value={formData[field]}
+              onChange={handleChange}
+              readOnly={!isEditing && field !== "complain_id"}
+              className={`w-full p-2 rounded border ${isEditing ? "border-blue-400" : "border-gray-300"}`}
+            />
+          ) : (
+            <input
+              type="text"
+              name={field}
+              value={formData[field]}
+              onChange={handleChange}
+              readOnly={!isEditing && field !== "complain_id"}
+              className={`w-full p-2 rounded border ${isEditing ? "border-blue-400" : "border-gray-300"}`}
+            />
+          )}
+        </div>
+      ))}
 
-      {/* Button to add a new issue */}
-      <div className="flex justify-center mb-6">
+      {/* Add Issue Button */}
+      <div className="flex justify-center mt-6">
         <button
           onClick={() => router.push("/AdminAddIssue")}
-          className="bg-green-500 hover:bg-green-700 text-white font-semibold text-lg px-5 py-2 rounded-lg shadow-md flex items-center space-x-2 transition duration-200 ease-in-out"
+          className="bg-green-500 hover:bg-green-600 text-white font-semibold px-5 py-2 rounded shadow flex items-center space-x-2"
         >
-          <FaPlus className="text-xl" />
+          <FaPlus />
           <span>Add New Issue for Developer</span>
         </button>
       </div>

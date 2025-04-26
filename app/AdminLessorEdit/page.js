@@ -2,12 +2,10 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import supabase from "../../config/supabaseClient";
 import toast, { Toaster } from 'react-hot-toast';
 
 const EditLessor = () => {
   const router = useRouter();
-
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     lessor_id: "",
@@ -21,37 +19,42 @@ const EditLessor = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-        if (!sessionStorage.getItem("admin_id")) {
-        toast.error("Admin ID not found. Please log in.");
-        router.push("/AdminLogin");
-        return;
-      }
+    if (!sessionStorage.getItem("admin_id")) {
+      toast.error("Admin ID not found. Please log in.");
+      router.push("/AdminLogin");
+      return;
+    }
     const fetchLessorData = async () => {
       const lessor_id = sessionStorage.getItem("lessor_id");
+      const jwtToken = sessionStorage.getItem("jwtToken");
 
-      if (!lessor_id) {
-        toast.error("User ID is missing. Redirecting...");
+      if (!lessor_id || !jwtToken) {
+        toast.error("Missing required information. Redirecting...");
         router.push("/AdminLessor");
         return;
       }
-  
+
       try {
-        const response = await fetch(`/api/adFetchLessor?lessor_id=${lessor_id}`);
-        
+        const response = await fetch(`/api/adFetchLessor?lessor_id=${lessor_id}`, {
+          headers: {
+            Authorization: `Bearer ${jwtToken}`
+          }
+        });
+
         if (!response.ok) {
           const errorDetails = await response.json();
           throw new Error(`Error ${response.status}: ${errorDetails.error}`);
         }
-  
+
         const { lessorDetails } = await response.json();
-        const data = lessorDetails[0]; 
+        const data = lessorDetails[0];
         setFormData({
-          lessor_id: data.lessor_id,
-          lessor_firstname: data.lessor_firstname,
-          lessor_lastname: data.lessor_lastname,
-          lessor_phone_number: data.lessor_phone_number,
-          lessor_line_url: data.lessor_line_url,
-          lessor_email: data.lessor_email,
+          lessor_id: data.lessor_id || "",
+          lessor_firstname: data.lessor_firstname || "",
+          lessor_lastname: data.lessor_lastname || "",
+          lessor_phone_number: data.lessor_phone_number || "",
+          lessor_line_url: data.lessor_line_url || "",
+          lessor_email: data.lessor_email || "",
           lessor_profile_pic: data.lessor_profile_pic || ""
         });
         setLoading(false);
@@ -64,32 +67,38 @@ const EditLessor = () => {
     fetchLessorData();
   }, [router]);
 
-  const handleEditClick = () => setIsEditing(true); 
+  const handleEditClick = () => setIsEditing(true);
 
   const handleSaveClick = async () => {
+    const jwtToken = sessionStorage.getItem("jwtToken");
     try {
-      const response = await fetch(`/api/adFetchLessor`, {
+      const response = await fetch("/api/adFetchLessor", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${jwtToken}`
+        },
         body: JSON.stringify({
           lessor_id: formData.lessor_id,
           lessor_firstname: formData.lessor_firstname,
           lessor_lastname: formData.lessor_lastname,
           lessor_phone_number: formData.lessor_phone_number,
           lessor_line_url: formData.lessor_line_url
-        }),
+        })
       });
-  
-      // Check if the response is OK and that it has JSON content
+
       if (!response.ok) {
+        const errorDetails = await response.json();
         throw new Error(`Failed to update lessor: ${errorDetails.error}`);
       }
-  
-      // If response is OK and JSON, proceed
+
       const data = await response.json();
       toast.success(data.message || "Lessor information updated successfully");
       setIsEditing(false);
-    } catch (error) {}
+    } catch (error) {
+      console.error("Update Error:", error.message);
+      toast.error(error.message);
+    }
   };
 
   const handleDeleteClick = () => {
@@ -104,7 +113,7 @@ const EditLessor = () => {
             Yes
           </button>
           <button
-            onClick={() => toast.dismiss(toastId)} // Dismiss the specific toast
+            onClick={() => toast.dismiss(toastId)}
             className="bg-gray-500 text-white px-3 py-1 rounded"
           >
             No
@@ -113,32 +122,39 @@ const EditLessor = () => {
       </div>,
       {
         position: "top-center",
-        autoClose: false,
-        closeOnClick: false,
-        draggable: false,
+        duration: Infinity,
+        closeOnClick: false
       }
     );
   };
 
-
   const confirmDelete = async (isConfirmed, toastId) => {
     if (isConfirmed) {
-      const response = await fetch('/api/adFetchLessor', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lessor_id: formData.lessor_id }),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to delete car: ${errorDetails.error}`);
+      const jwtToken = sessionStorage.getItem("jwtToken");
+      try {
+        const response = await fetch("/api/adFetchLessor", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${jwtToken}`
+          },
+          body: JSON.stringify({ lessor_id: formData.lessor_id })
+        });
+
+        if (!response.ok) {
+          const errorDetails = await response.json();
+          throw new Error(`Failed to delete lessor: ${errorDetails.error}`);
+        }
+
+        const data = await response.json();
+        toast.success(data.message || "Lessor deleted successfully");
+        router.push("/AdminLessor");
+      } catch (error) {
+        console.error("Delete Error:", error.message);
+        toast.error(error.message);
       }
-      const data = await response.json();
-      toast.success(data.message || "lessor information delete successfully");
-      router.push("/AdminLessor");
     }
   };
-
- 
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -166,7 +182,6 @@ const EditLessor = () => {
         </svg>
       </button>
 
-      {/* Display the profile picture */}
       {formData.lessor_profile_pic && (
         <div className="mb-2 mt-20">
           <img
@@ -178,7 +193,6 @@ const EditLessor = () => {
       )}
 
       <div className="flex justify-between mb-2 mt-8">
-        <Toaster position="top-center" />
         <button onClick={handleDeleteClick} className="bg-red-500 text-white px-4 py-2 rounded">Delete</button>
         {isEditing ? (
           <button onClick={handleSaveClick} className="bg-blue-500 text-white px-4 py-2 rounded">Save</button>
@@ -187,13 +201,12 @@ const EditLessor = () => {
         )}
       </div>
 
-      {/* Lessor Details */}
       <div className="mb-4">
         <label className="block text-gray-500 mb-1">Lessor ID</label>
         <input
           type="text"
           name="lessor_id"
-          value={formData.lessor_id}
+          value={formData.lessor_id || ""}
           readOnly
           className="w-full p-2 rounded border border-gray-300 bg-gray-100"
         />
@@ -203,7 +216,7 @@ const EditLessor = () => {
         <input
           type="text"
           name="lessor_firstname"
-          value={formData.lessor_firstname}
+          value={formData.lessor_firstname || ""}
           onChange={handleChange}
           readOnly={!isEditing}
           className={`w-full p-2 rounded border ${isEditing ? 'border-blue-400' : 'border-gray-300'}`}
@@ -214,7 +227,7 @@ const EditLessor = () => {
         <input
           type="text"
           name="lessor_lastname"
-          value={formData.lessor_lastname}
+          value={formData.lessor_lastname || ""}
           onChange={handleChange}
           readOnly={!isEditing}
           className={`w-full p-2 rounded border ${isEditing ? 'border-blue-400' : 'border-gray-300'}`}
@@ -225,7 +238,7 @@ const EditLessor = () => {
         <input
           type="text"
           name="lessor_phone_number"
-          value={formData.lessor_phone_number}
+          value={formData.lessor_phone_number || ""}
           onChange={handleChange}
           readOnly={!isEditing}
           className={`w-full p-2 rounded border ${isEditing ? 'border-blue-400' : 'border-gray-300'}`}
@@ -236,7 +249,7 @@ const EditLessor = () => {
         <input
           type="text"
           name="lessor_line_url"
-          value={formData.lessor_line_url}
+          value={formData.lessor_line_url || ""}
           onChange={handleChange}
           readOnly={!isEditing}
           className={`w-full p-2 rounded border ${isEditing ? 'border-blue-400' : 'border-gray-300'}`}
@@ -247,7 +260,7 @@ const EditLessor = () => {
         <input
           type="email"
           name="lessor_email"
-          value={formData.lessor_email}
+          value={formData.lessor_email || ""}
           readOnly
           className="w-full p-2 rounded border border-gray-300 bg-gray-100"
         />

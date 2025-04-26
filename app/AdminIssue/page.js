@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { FaExclamationTriangle, FaPen, FaSearch, FaPlus } from "react-icons/fa";
 import { useRouter } from "next/navigation";
-import supabase from "../../config/supabaseClient";
 import { Toaster, toast } from "react-hot-toast";
 
 const Issues = () => {
@@ -11,31 +10,40 @@ const Issues = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const router = useRouter();
 
-  // Fetch issues from Supabase
   useEffect(() => {
+    
+    const jwtToken = sessionStorage.getItem("jwtToken");
+    if (!jwtToken) {
+      toast.error("Authentication token not found. Please log in.");
+      router.push("/AdminLogin");
+      return;
+    }
+
     const fetchIssue = async () => {
-      if (!sessionStorage.getItem("admin_id")) {
-        toast.error("Admin ID not found. Please log in.");
-        router.push("/AdminLogin");
-        return;
-      }
       try {
-        const { data, error } = await supabase.rpc("get_all_issues");
+        const response = await fetch(`/api/adFetchIssue`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${jwtToken}`,
+          },
+        });
 
-        if (error) throw error;
+        const result = await response.json();
 
-        setIssues(data);
+        if (!response.ok) {
+          throw new Error(result.error || "Failed to fetch issues");
+        }
+
+        setIssues(result.issues || []);
       } catch (error) {
         console.error("Error fetching issues:", error);
         toast.error("Failed to fetch issues.");
-        router.push("/AdminLogin");
       }
     };
 
     fetchIssue();
   }, [router]);
 
-  // Filter and sort issues
   const filteredIssues = issues
     .filter((issue) =>
       issue.issue_header.toLowerCase().includes(searchQuery.toLowerCase())
@@ -45,18 +53,15 @@ const Issues = () => {
       return statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status);
     });
 
-  // Handle navigation to edit page
   const handleEditClick = (issueId) => {
-    sessionStorage.setItem("issue_id", issueId); // Store issue_id in sessionStorage
-    router.push("/AdminIssueEdit"); // Redirect to edit page without issue_id in the URL
+    sessionStorage.setItem("issue_id", issueId);
+    router.push("/AdminIssueEdit");
   };
 
-  // Handle navigation to add issue page
   const handleAddIssueClick = () => {
-    router.push("/AdminAddIssue"); // Redirect to add issue page
+    router.push("/AdminAddIssue");
   };
 
-  // Function to get the color for the status text
   const getStatusColor = (status) => {
     switch (status) {
       case "Not Started":
@@ -78,32 +83,18 @@ const Issues = () => {
           onClick={() => router.push("/AdminMenu")}
           className="absolute top-10 left-4 flex items-center justify-center w-12 h-12 rounded-lg border border-gray-200 shadow-sm text-black"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-            stroke="currentColor"
-            className="w-6 h-6"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M15 19l-7-7 7-7"
-            />
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
 
-        <h1 className="text-2xl font-bold text-black text-left w-full px-6 mt-16 py-4">
-          Issues
-        </h1>
+        <h1 className="text-2xl font-bold text-black text-left w-full px-6 mt-16 py-4">Issues</h1>
 
         {/* Search Bar */}
         <div className="relative mb-4">
           <button className="absolute left-0 top-1/2 transform -translate-y-1/2 bg-grey-100 rounded-full p-2">
             <FaSearch className="text-gray-500" />
           </button>
-
           <input
             type="text"
             placeholder="Search by Issue Header"
@@ -114,39 +105,37 @@ const Issues = () => {
         </div>
 
         {/* Display Filtered and Sorted Issues */}
-        {filteredIssues.map((issue) => (
-          <div
-            key={issue.issue_id}
-            className="flex items-center justify-between bg-gray-100 p-4 rounded-lg mb-4"
-          >
-            <div className="flex items-center">
-              <FaExclamationTriangle className="text-xl mr-3 text-black" />
-              <div className="font-semibold text-black">
-                <div>{issue.issue_header}</div>
-                <div className="text-sm text-gray-500">
-                  Details: {issue.issue_detail}
-                </div>
-                <div
-                  className={`text-sm font-semibold ${getStatusColor(
-                    issue.status
-                  )}`}
-                >
-                  Status: {issue.status}
-                </div>
-                <div className="text-sm text-gray-500">
-                  Resolved By: {issue.resolved_by || "N/A"}
+        {filteredIssues.length > 0 ? (
+          filteredIssues.map((issue) => (
+            <div
+              key={issue.issue_id}
+              className="flex items-center justify-between bg-gray-100 p-4 rounded-lg mb-4"
+            >
+              <div className="flex items-center">
+                <FaExclamationTriangle className="text-xl mr-3 text-black" />
+                <div className="font-semibold text-black">
+                  <div>{issue.issue_header}</div>
+                  <div className="text-sm text-gray-500">Details: {issue.issue_detail}</div>
+                  <div className={`text-sm font-semibold ${getStatusColor(issue.status)}`}>
+                    Status: {issue.status}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    Resolved By: {issue.resolved_by || "N/A"}
+                  </div>
                 </div>
               </div>
+              <button
+                onClick={() => handleEditClick(issue.issue_id)}
+                className="flex items-center text-black"
+              >
+                <FaPen className="text-xl mr-2" />
+                Edit Info
+              </button>
             </div>
-            <button
-              onClick={() => handleEditClick(issue.issue_id)}
-              className="flex items-center text-black"
-            >
-              <FaPen className="text-xl mr-2" />
-              Edit Info
-            </button>
-          </div>
-        ))}
+          ))
+        ) : (
+          <p className="text-center text-gray-400 mt-4">No issues found.</p>
+        )}
       </div>
 
       {/* Add Issue Button */}

@@ -12,54 +12,57 @@ export default function LocationPage({ params }) {
   const [searchText, setSearchText] = useState("");
   const [parkingData, setParkingData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-    // Check for userId in sessionStorage
   useEffect(() => {
     const userId = sessionStorage.getItem("userId");
     if (!userId) {
       toast.error("User ID not found. Please log in.");
-      router.push("/login_renter"); // Redirect to renter login if userId is missing
-      return; // Prevent further execution
+      router.push("/login_renter");
+      return;
     }
   }, [router]);
-  
-  // Resolve params.locations (handles async `params`)
+
   useEffect(() => {
     async function resolveParams() {
       const resolvedParams = await params;
-      const decodedLocation = decodeURIComponent(
-        resolvedParams.locations
-      ).toLowerCase();
+      const decodedLocation = decodeURIComponent(resolvedParams.locations).toLowerCase();
       setLocation(decodedLocation);
-      setSearchText(decodedLocation); // Initialize the search text
+      setSearchText(decodedLocation);
     }
     resolveParams();
   }, [params]);
 
-  // Fetch parking data when location changes
   useEffect(() => {
-
-    
     if (!location) return;
 
     const fetchParkingData = async () => {
       setLoading(true);
       try {
+        const token = sessionStorage.getItem("jwtToken");
+        if (!token) {
+          throw new Error("Missing authentication token.");
+        }
+
         const response = await fetch(
-          `/api/renterFetchParking?locationName=${encodeURIComponent(location)}`
+          `/api/renterFetchParking?locationName=${encodeURIComponent(location)}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`, // ✅ Add Authorization header
+            },
+          }
         );
+
         if (!response.ok) {
           setParkingData([]);
-          setError(null); // No error message shown to the user
           return;
         }
+
         const { parkingLots } = await response.json();
         setParkingData(parkingLots);
-        setError(null);
       } catch (err) {
-        console.error("Error fetching parking data:", err);
-        setError("Failed to load parking data.");
+        console.error("❌ Error fetching parking data:", err);
+        toast.error("Failed to load parking data.");
       } finally {
         setLoading(false);
       }
@@ -71,11 +74,10 @@ export default function LocationPage({ params }) {
   const handleParkingClick = (parkingLotId, availableSlots) => {
     if (availableSlots === 0) {
       toast.error("This parking lot is full. Please select another.");
-      return; // Stop further execution
+      return;
     }
-
-    sessionStorage.setItem("parkingLotId", parkingLotId); // Save parking lot ID
-    router.push(`/reservation`); // Navigate to reservation page
+    sessionStorage.setItem("parkingLotId", parkingLotId);
+    router.push("/reservation");
   };
 
   const getImageForLocation = (locationName) => {
@@ -93,6 +95,7 @@ export default function LocationPage({ params }) {
     <div className="min-h-screen bg-white p-4 space-y-4">
       <Toaster position="top-center" reverseOrder={false} />
       <BackButton targetPage="/search" />
+
       {/* Search Box */}
       <div className="flex items-center bg-gray-100 p-3 rounded-lg shadow-md mt-7">
         <input
@@ -146,13 +149,11 @@ export default function LocationPage({ params }) {
                 </p>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <img
-                  src="/images/parking-icon.png"
-                  alt="Parking Icon"
-                  className="w-8 h-8"
-                />
-              </div>
+              <img
+                src="/images/parking-icon.png"
+                alt="Parking Icon"
+                className="w-8 h-8"
+              />
             </div>
           ))
         ) : (

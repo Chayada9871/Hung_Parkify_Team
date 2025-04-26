@@ -1,29 +1,36 @@
 'use client'
+
 import React, { useEffect, useState } from "react";
 import { FaUser, FaPen, FaSearch } from "react-icons/fa";
 import { useRouter } from "next/navigation";
 import { Toaster, toast } from "react-hot-toast";
 
 const Developers = () => {
-  const [developers, setDevelopers] = useState([]); // Ensure it's an empty array initially
+  const [developers, setDevelopers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const router = useRouter();
 
   useEffect(() => {
-    if (!sessionStorage.getItem("admin_id")) {
-      toast.error("Admin ID not found. Please log in.");
-      router.push("/AdminLogin");
-      return;
-    }
+    const jwtToken = sessionStorage.getItem("jwtToken");
+    if (!jwtToken) {
+         toast.error("Authentication token not found. Please log in.");
+         router.push("/AdminLogin");
+         return;
+       }
+
 
     const fetchDevelopers = async () => {
       try {
-        const response = await fetch("/api/adFetchDev"); // Call the API route
-        const result = await response.json();
+        const response = await fetch("/api/adFetchDev", {
+          headers: {
+            Authorization: `Bearer ${jwtToken}`,
+          },
+        });
 
+        const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Failed to fetch developers.");
 
-        setDevelopers(result.developers || []); // Set developers to empty array if no data is returned
+        setDevelopers(result.developers || []);
       } catch (error) {
         console.error("Error fetching developers:", error);
         toast.error("Failed to fetch developers.");
@@ -33,17 +40,15 @@ const Developers = () => {
     fetchDevelopers();
   }, [router]);
 
-  // Filter developers based on search query, ensure `developers` is an array
   const filteredDevelopers = developers.filter((developer) =>
     `${developer.email} ${developer.developer_id}`
       .toLowerCase()
       .includes(searchQuery.toLowerCase())
   );
 
-  // Handle navigation to edit page
   const handleEditClick = (developerId) => {
-    sessionStorage.setItem("developer_id", developerId); // Store developer_id in sessionStorage
-    router.push("/AdminDevEdit"); // Redirect to edit page without developer_id in the URL
+    sessionStorage.setItem("developer_id", developerId);
+    router.push("/AdminDevEdit");
   };
 
   return (
@@ -89,7 +94,7 @@ const Developers = () => {
           />
         </div>
 
-        {/* Display Filtered Developers */}
+        {/* Developer List */}
         {filteredDevelopers.length > 0 ? (
           filteredDevelopers.map((developer) => (
             <div

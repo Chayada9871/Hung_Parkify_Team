@@ -1,20 +1,38 @@
+// ================================================
+// 🔐 ADMIN LOGIN API - RSA JWT Auth (RS256)
+// ================================================
+
 import sql from '../../../config/db';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
+import fs from "fs";
+import path from "path";
 
-const jwtSecret = process.env.JWT_SECRET;
-const saltRounds = 10; // Salt rounds for bcrypt hashing
+// ================================================
+// 📂 Load RSA Private Key for Signing JWTs
+// ================================================
+const privateKey = fs.readFileSync(path.resolve("keys/private.pem"), "utf8");
 
+// 🔁 Bcrypt settings
+const saltRounds = 10;
+
+// ================================================
+// 🚀 POST /api/adLogin
+// ================================================
 export async function POST(req) {
   try {
+    // 📨 Step 1: Parse login input
     const { email, password } = await req.json();
+    console.log("📨 Login request from:", email);
 
-    // Input validation
     if (!email || !password) {
-      return new Response(JSON.stringify({ error: "Email and password are required." }), { status: 400 });
+      return new Response(JSON.stringify({ error: "Email and password are required." }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
-    // Fetch the admin user by email
+    // 🔍 Step 2: Find matching admin in database
     const adminResult = await sql`
       SELECT admin_id, email, password
       FROM admin
@@ -22,68 +40,73 @@ export async function POST(req) {
       LIMIT 1
     `;
 
-    // If no admin found with the email, return a generic error
     if (adminResult.length === 0) {
-      return new Response(JSON.stringify({ error: "Invalid email or password." }), { status: 401 });
+      console.warn("❌ Admin not found:", email);
+      return new Response(JSON.stringify({ error: "Invalid email or password." }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     const admin = adminResult[0];
-
-    // Transitional login: Check if the password is hashed or plaintext
     let passwordMatch = false;
+
+    // 🔐 Step 3: Check password (bcrypt or plaintext)
     if (admin.password.startsWith('$2b$')) {
-      // Password is already bcrypt-hashed
+      // Password is already hashed
       passwordMatch = await bcrypt.compare(password, admin.password);
     } else {
-      // Password is plaintext, compare directly
+      // Password is in plaintext (legacy)
       passwordMatch = password === admin.password;
 
       if (passwordMatch) {
-        // If the plaintext password matches, hash it and update in the database
+        // 🛡 Step 4: Upgrade plaintext to hashed
         const hashedPassword = await bcrypt.hash(password, saltRounds);
         await sql`
           UPDATE admin
           SET password = ${hashedPassword}
           WHERE admin_id = ${admin.admin_id}
         `;
-        console.log(`Password for admin_id ${admin.admin_id} has been updated to bcrypt.`);
+        console.log(`✅ Password upgraded to bcrypt for admin_id ${admin.admin_id}`);
       }
     }
 
     if (!passwordMatch) {
-      return new Response(
-        JSON.stringify({ error: "Invalid email or password." }),
-        { status: 401 }
-      );
+      console.warn("❌ Incorrect password for:", email);
+      return new Response(JSON.stringify({ error: "Invalid email or password." }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
-    // Generate a JWT token
+    // 🎟 Step 5: Create JWT token using RSA private key
+
     const token = jwt.sign(
       {
         admin_id: admin.admin_id,
         email: admin.email,
-        role: "admin", // Include any additional claims if needed
+        role: "admin",
       },
-      jwtSecret, // Secret key
-      { expiresIn: "1h" } // Token expiration time
+      privateKey, // ✅ ต้องเป็น private key จริง ๆ
+      { algorithm: "RS256", expiresIn: "1h" }
+
     );
 
-    // Return the token in the response body
-    return new Response(
-      JSON.stringify({ admin_id: admin.admin_id, token }),
-      {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    // ✅ Step 6: Return token and admin_id to client
+    console.log("✅ JWT issued for admin_id:", admin.admin_id);
+    return new Response(JSON.stringify({ token, admin_id: admin.admin_id }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
 
   } catch (error) {
-    console.error("Error during login:", error);
+    console.error("🔥 Server error during login:", error);
     return new Response(
-      JSON.stringify({ error: "An error occurred during login.", details: error.message }),
-      { status: 500 }
+      JSON.stringify({ error: "Server error", details: error.message }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }
     );
   }
 }

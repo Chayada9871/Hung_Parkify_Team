@@ -7,32 +7,27 @@ import BottomNav from '../components/BottomNavLessor';
 
 export default function HomePage() {
   const router = useRouter();
-  const [lessorId, setLessorId] = useState(null); // Initialize lessorId in state
+  const [lessorId, setLessorId] = useState(null);
   const [lessorDetails, setLessorDetails] = useState({});
   const [reservationsByDate, setReservationsByDate] = useState({});
 
   useEffect(() => {
-    // Check for sessionStorage only on the client side
     const storedLessorId = sessionStorage.getItem('lessorId');
-  
     if (storedLessorId) {
-      setLessorId(storedLessorId); // Set lessorId in state
+      setLessorId(storedLessorId);
     } else {
       toast.error("Lessor ID not found");
-      router.push('/login_lessor'); // Redirect if no lessorId is found
+      router.push('/login_lessor');
     }
   }, []);
 
   useEffect(() => {
-    
-    if (!lessorId) return; // Wait until lessorId is set
+    if (!lessorId) return;
 
     const fetchData = async () => {
       try {
         const response = await fetch(`../api/lessorFetchHome?lessorId=${lessorId}`);
         if (!response.ok) throw new Error('Failed to fetch data');
-        console.log(response);
-
         const data = await response.json();
         setLessorDetails(data.lessorDetails);
 
@@ -47,20 +42,7 @@ export default function HomePage() {
           if (!acc[formattedDate]) {
             acc[formattedDate] = [];
           }
-          acc[formattedDate].push({
-            carModel: reservation.car_model,
-            license: reservation.license_plate,
-            address: reservation.address,
-            name: `${reservation.first_name} ${reservation.last_name}`,
-            phone: reservation.phone_number,
-            duration: [
-              reservation.duration_day > 0 ? `${reservation.duration_day} Day${reservation.duration_day > 1 ? 's' : ''}` : '',
-              reservation.duration_hour > 0 ? `${reservation.duration_hour} Hour${reservation.duration_hour > 1 ? 's' : ''}` : ''
-            ].filter(Boolean).join(' '),
-            time: reservation.start_time && reservation.end_time
-              ? `${new Date(reservation.start_time).toLocaleTimeString('en-US', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hour12: true })} - ${new Date(reservation.end_time).toLocaleTimeString('en-US', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hour12: true })}`
-              : 'ALL DAY',
-          });
+          acc[formattedDate].push(reservation); // push full reservation object
           return acc;
         }, {});
 
@@ -72,7 +54,7 @@ export default function HomePage() {
     };
 
     fetchData();
-  }, [lessorId]); // Trigger this effect only when lessorId is available
+  }, [lessorId]);
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -80,15 +62,15 @@ export default function HomePage() {
       <div className="flex items-center justify-between p-4 bg-white shadow-md">
         <div>
           <p className="text-sm text-gray-500">Hello, {lessorDetails.lessor_firstname}</p>
-          <h1 className="text-xl font-bold">Made them easily <br /> Parking</h1>
+          <h1 className="text-xl font-bold">Manage Your Parking</h1>
         </div>
         <img
-          src={lessorDetails.lessor_profile_pic|| 'profile.jpeg'}
+          src={lessorDetails.lessor_profile_pic || 'profile.jpeg'}
           alt="Profile"
           className="w-10 h-10 rounded-full"
         />
       </div>
-  
+
       <div className="flex-grow p-4 space-y-4 overflow-y-auto">
         {Object.keys(reservationsByDate).length > 0 ? (
           Object.entries(reservationsByDate).map(([date, reservations]) => (
@@ -98,33 +80,40 @@ export default function HomePage() {
                   {date}
                 </span>
               </div>
-  
-              {reservations.map((booking, index) => (
+
+              {reservations.map((res, index) => (
                 <div key={index} className="p-4 bg-white rounded-lg shadow-md mb-4">
+                  {/* Address */}
                   <div className="mb-2">
-                    <p className="text-sm text-gray-500">{booking.address}</p>
+                    <p className="text-sm text-gray-500">📍 {res.location_name}</p>
                   </div>
-                  
-                  <div className="flex justify-between items-center">
+
+                  {/* Car Info */}
+                  <div className="flex justify-between items-center mb-3">
                     <div>
-                      <h2 className="text-xl font-semibold">{booking.carModel}</h2>
-                      <p className="text-sm text-gray-500 mt-1">{booking.license}</p>
-                      <p className="text-sm text-gray-500 mt-1">{booking.time}</p>
+                      <h2 className="text-xl font-semibold">{res.car_model}</h2>
+                      <p className="text-sm text-gray-500 mt-1">License: {res.license_plate}</p>
+                      <p className="text-sm text-gray-500 mt-1">Slot: {res.slot_number || '-'}</p>
                     </div>
-  
-                    <div className="flex flex-col items-end text-right space-y-1">
-                      <div className="flex items-center text-gray-600">
+                    <div className="flex flex-col text-right space-y-1">
+                      <div className="flex items-center justify-end text-gray-600">
                         <FaUserAlt className="mr-1" />
-                        <p className="text-sm">{booking.name}</p>
+                        <p className="text-sm">{res.first_name} {res.last_name}</p>
                       </div>
-                      <div className="flex items-center text-gray-600">
+                      <div className="flex items-center justify-end text-gray-600">
                         <FaPhoneAlt className="mr-1" />
-                        <p className="text-sm">{booking.phone}</p>
-                      </div>
-                      <div className="text-customBlue font-semibold text-lg">
-                        {booking.duration}
+                        <p className="text-sm">{res.phone_number}</p>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Reservation Timing Info */}
+                  <div className="border-t pt-2 text-sm text-gray-700 space-y-1">
+                    <p>🗓️ Reservation Date: {new Date(res.reservation_date).toLocaleDateString('en-GB')}</p>
+                    <p>🕒 Start Time: {new Date(res.start_time).toLocaleTimeString('en-US', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hour12: true })}</p>
+                    <p>🕔 End Time: {new Date(res.end_time).toLocaleTimeString('en-US', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hour12: true })}</p>
+                    <p>💰 Total Price: {res.total_price} THB</p>
+                    <p>⏳ Duration: {res.duration_day} Day(s) {res.duration_hour} Hour(s)</p>
                   </div>
                 </div>
               ))}
@@ -134,6 +123,7 @@ export default function HomePage() {
           <p className="text-center text-gray-500">No reservations available</p>
         )}
       </div>
+
       <BottomNav />
     </div>
   );

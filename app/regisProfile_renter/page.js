@@ -21,10 +21,10 @@ export default function RegisterInformationPage() {
       const storedEmail = sessionStorage.getItem("userEmail") || "";
       const storedPassword = sessionStorage.getItem("userPassword") || "";
 
+      console.log("📦 Loaded from sessionStorage:", { storedEmail, storedPassword });
+
       if (!storedEmail || !storedPassword) {
-        toast.error(
-          "Email and password are required. Redirecting to registration."
-        );
+        toast.error("Email and password are required. Redirecting to registration.");
         router.push("/register_renter");
         return;
       }
@@ -32,7 +32,6 @@ export default function RegisterInformationPage() {
       setEmail(storedEmail);
       setPassword(storedPassword);
 
-      // Update userData with the stored email and password
       setUserData((prevData) => ({
         ...prevData,
         email: storedEmail,
@@ -47,10 +46,12 @@ export default function RegisterInformationPage() {
       ...prevData,
       [name]: value,
     }));
+    console.log("✍️ Field updated:", name, value);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log("🚀 Submitting user data:", userData);
 
     if (
       !userData.email ||
@@ -71,21 +72,21 @@ export default function RegisterInformationPage() {
       });
 
       const result = await response.json();
+      console.log("📩 Response from server:", result);
 
       if (!response.ok) {
-        throw new Error(
-          result.error || "An error occurred while registering. Please try again."
-        );
+        toast.error(result.error || 'Registration failed');
+        return;
       }
 
-      // Store user_id in sessionStorage for the next page
-      sessionStorage.setItem("userId", result.userId);
-
-      toast.success("Registration successful!");
-      router.push("/regisCar"); // Redirect to car registration page
+     
+      setTimeout(() => {
+        router.push('/login_renter');
+      }, 100); // 100ms delay
+      
     } catch (error) {
       toast.error(error.message);
-      console.error("Registration error:", error);
+      console.error("❌ Registration error:", error);
     }
   };
 
@@ -121,7 +122,6 @@ export default function RegisterInformationPage() {
           onSubmit={handleSubmit}
           className="space-y-6 flex flex-col items-center"
         >
-          {/* Input fields */}
           <div className="w-11/12">
             <input
               type="text"

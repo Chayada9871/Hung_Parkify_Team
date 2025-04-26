@@ -1,65 +1,123 @@
 // app/api/adFetchDeveloper/route.js
-import sql from '../../../config/db'; // Ensure your database configuration is correct
+import sql from '../../../config/db';
+import jwt from 'jsonwebtoken';
+import fs from 'fs';
+import path from 'path';
+import { encryptAES, decryptAES } from '/utils/crypto';
 
+const PUBLIC_KEY = fs.readFileSync(path.resolve('keys/public.pem'), 'utf8');
+
+// ✅ JWT Validator
+async function validateJWT(req, requiredRole = 'admin') {
+  const authHeader = req.headers.get('authorization');
+  const token = authHeader?.split(' ')[1];
+
+  if (!token) {
+    return { isValid: false, error: 'Authentication token is missing' };
+  }
+
+  try {
+    const decoded = jwt.verify(token, PUBLIC_KEY, { algorithms: ['RS256'] });
+    if (requiredRole && decoded.role !== requiredRole) {
+      return { isValid: false, error: 'Access denied: insufficient permissions' };
+    }
+    return { isValid: true, user: decoded };
+  } catch (err) {
+    console.error('❌ JWT Error:', err.message);
+    return { isValid: false, error: 'Invalid or expired token' };
+  }
+}
+
+// 🔍 GET: Fetch developers (all or by ID)
 export async function GET(req) {
+  const auth = await validateJWT(req);
+  if (!auth.isValid) {
+    return new Response(JSON.stringify({ error: auth.error }), { status: 401 });
+  }
+
   try {
     const { searchParams } = new URL(req.url);
     const developerId = searchParams.get('developerId');
 
-    let developerResult;
+    const result = developerId
+      ? await sql`SELECT developer_id, email FROM developer WHERE developer_id = ${developerId}`
+      : await sql`SELECT developer_id, email FROM developer`;
 
-    if (developerId) {
-      developerResult = await sql`
-        SELECT developer_id, email
-        FROM developer
-        WHERE developer_id = ${developerId}
-      `;
-    } else {
-      developerResult = await sql`
-        SELECT developer_id, email
-        FROM developer
-      `;
-    }
-
-    if (developerResult.length === 0) {
+    if (result.length === 0) {
       return new Response(JSON.stringify({ error: 'No developers found' }), { status: 404 });
     }
 
-    return new Response(JSON.stringify({ developers: developerResult }), { status: 200 });
-  } catch (error) {
-    console.error('Database Error:', error);
+    const decrypted = result.map(dev => ({
+      developer_id: dev.developer_id,
+      email: decryptAES(dev.email),
+    }));
+
+    return new Response(JSON.stringify({ developers: decrypted }), { status: 200 });
+  } catch (err) {
+    console.error('❌ DB Error in GET:', err);
     return new Response(JSON.stringify({ error: 'Error fetching developers' }), { status: 500 });
   }
 }
 
-
-// DELETE function to remove a developer by ID
-export async function DELETE(req) {
-  const { searchParams } = new URL(req.url);
-  const developerId = searchParams.get('developerId');
-
-  if (!developerId) {
-    console.error('Delete Error: Developer ID is required');
-    return new Response(JSON.stringify({ error: 'Developer ID is required' }), { status: 400 });
+// 📝 POST: Add new developer
+export async function POST(req) {
+  const auth = await validateJWT(req);
+  if (!auth.isValid) {
+    return new Response(JSON.stringify({ error: auth.error }), { status: 401 });
   }
 
   try {
-    console.log(`Attempting to delete developer with ID: ${developerId}`);
+    const { email } = await req.json();
 
-    const deleteResult = await sql`
+    if (!email) {
+      return new Response(JSON.stringify({ error: 'Email is required' }), { status: 400 });
+    }
+
+    const encryptedEmail = encryptAES(email);
+
+    const insert = await sql`
+      INSERT INTO developer (email)
+      VALUES (${encryptedEmail})
+      RETURNING developer_id
+    `;
+
+    return new Response(JSON.stringify({
+      message: 'Developer created successfully',
+      developer_id: insert[0].developer_id,
+    }), { status: 201 });
+  } catch (err) {
+    console.error('❌ POST Error:', err);
+    return new Response(JSON.stringify({ error: 'Error creating developer' }), { status: 500 });
+  }
+}
+
+// ❌ DELETE: Remove developer
+export async function DELETE(req) {
+  const auth = await validateJWT(req);
+  if (!auth.isValid) {
+    return new Response(JSON.stringify({ error: auth.error }), { status: 401 });
+  }
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const developerId = searchParams.get('developerId');
+
+    if (!developerId) {
+      return new Response(JSON.stringify({ error: 'Developer ID is required' }), { status: 400 });
+    }
+
+    const deleted = await sql`
       DELETE FROM developer WHERE developer_id = ${developerId}
       RETURNING developer_id
     `;
 
-    if (deleteResult.length === 0) {
-      console.error(`Delete Error: Developer with ID ${developerId} not found`);
+    if (deleted.length === 0) {
       return new Response(JSON.stringify({ error: 'Developer not found or could not be deleted' }), { status: 404 });
     }
 
-    console.log(`Developer with ID ${developerId} deleted successfully`);
     return new Response(JSON.stringify({ message: 'Developer deleted successfully' }), { status: 200 });
-  } catch (error) {
-    console.error('Delete Error:', error);
-    return new Response(JSON.stringify({ error: 'Error deleting developer', details: error.message }), { status: 500 });
+  } catch (err) {
+    console.error('❌ DELETE Error:', err);
+    return new Response(JSON.stringify({ error: 'Error deleting developer', details: err.message }), { status: 500 });
   }
 }
